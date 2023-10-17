@@ -11,14 +11,14 @@
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
-    "@textshq/platform-sdk": "file: ~/../../platform-sdk/",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main",
     "ai": "^2.2.15",
     "chance": "^1.1.8",
     "date-fns": "^2.29.2",
     "got": "^11.0.0",
     "lodash": "^4.17.21",
-    "openai": "^4.12.1",
-    "react": "file: ~/../../react-global-shim-main/"
+    "openai": "^4.12.3",
+    "react": "https://github.com/TextsHQ/react-global-shim#main"
   },
   "devDependencies": {
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main",
