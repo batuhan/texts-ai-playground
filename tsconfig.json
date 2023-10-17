@@ -1,0 +1,9 @@
+{
+  "extends": "@textshq/platform-sdk/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": false, // remove
+  },
+  "include": ["src"]
+}
