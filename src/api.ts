@@ -16,57 +16,28 @@ import {
   Thread,
   ThreadFolderName,
   texts,
-} from "@textshq/platform-sdk";
-import { orderBy } from "lodash";
-import OpenAI from "openai";
-import { randomUUID as uuid } from "crypto";
-import { OpenAIStream, StreamingTextResponse } from "ai";
+  UserID,
+} from '@textshq/platform-sdk'
+import { orderBy } from 'lodash'
+import OpenAI from 'openai'
+import { randomUUID as uuid } from 'crypto'
+import { OpenAIStream, StreamingTextResponse } from 'ai'
 import {
   MODELS,
   SELF_ID,
   OPENAI_GPT_4_SVG_DATA_URI,
   OPENAI_SVG_DATA_URI,
-} from "./constants";
-
-function genThread(modelID: string) {
-  const t: Thread = {
-    id: modelID,
-    type: "single",
-    timestamp: new Date(),
-    description: `Chat with ${modelID}`,
-    messages: {
-      items: [getDefaultMessage(modelID)],
-      hasMore: false,
-    },
-    participants: {
-      hasMore: false,
-      items: [
-        {
-          id: "ai",
-          fullName: MODELS.find((mdl) => mdl.id === modelID).fullName,
-          imgURL: getModelImage(modelID),
-        },
-        {
-          id: SELF_ID,
-          fullName: "Human",
-        },
-      ],
-    },
-    isUnread: false,
-    isReadOnly: false,
-  };
-  return t;
-}
+} from './constants'
 
 function getModelImage(modelID: string) {
   switch (modelID) {
-    case "gpt-3.5-turbo":
-    case "gpt-3.5-turbo-16k":
-      return OPENAI_SVG_DATA_URI;
-    case "gpt-4":
-      return OPENAI_GPT_4_SVG_DATA_URI;
+    case 'gpt-3.5-turbo':
+    case 'gpt-3.5-turbo-16k':
+      return OPENAI_SVG_DATA_URI
+    case 'gpt-4':
+      return OPENAI_GPT_4_SVG_DATA_URI
     default:
-      return OPENAI_SVG_DATA_URI;
+      return OPENAI_SVG_DATA_URI
   }
 }
 
@@ -75,77 +46,78 @@ function getDefaultMessage(modelID: string): Message {
     id: uuid(),
     timestamp: new Date(),
     text: `This is the start of your conversation with ${
-      MODELS.find((mdl) => mdl.id === modelID).fullName
+      MODELS.find(mdl => mdl.id === modelID).fullName
     }. You can ask it anything you want!`,
-    senderID: "ai",
+    senderID: 'ai',
     isSender: false,
     threadID: modelID,
-  };
+  }
 }
 
 export default class ChatGPT implements PlatformAPI {
-  private currentUser: { username: string; modelID: string; apiKey: string } = {
+  private currentUser: { username: string, modelID: string, apiKey: string } = {
     username: null,
     modelID: null,
     apiKey: null,
-  };
+  }
 
-  private threads: Thread[] = [];
-  private messages: Message[] = [];
-  private openai: OpenAI;
+  private threads = new Map<Thread['id'], Thread>()
 
-  private eventHandler: OnServerEventCallback;
+  private messages = new Map<Thread['id'], Message[]>()
+
+  private openai: OpenAI
+
+  private eventHandler: OnServerEventCallback
 
   init = (session: SerializedSession) => {
     if (session) {
-      this.currentUser = session;
+      this.currentUser = session
       this.openai = new OpenAI({
         apiKey: session.apiKey,
-      });
+      })
     }
-  };
+  }
 
   login = (creds: LoginCreds): LoginResult => {
-    const loginCreds =
-      "custom" in creds &&
-      creds.custom &&
-      creds.custom.apiKey &&
-      creds.custom.modelID &&
-      creds.custom.username;
-    if (!loginCreds)
-      return { type: "error", errorMessage: "Invalid credentials" };
+    const loginCreds = 'custom' in creds
+      && creds.custom
+      && creds.custom.apiKey
+      && creds.custom.modelID
+      && creds.custom.username
+    if (!loginCreds) return { type: 'error', errorMessage: 'Invalid credentials' }
 
     this.currentUser = {
       username: creds.custom.username,
       modelID: creds.custom.modelID,
       apiKey: creds.custom.apiKey,
-    };
+    }
 
     this.openai = new OpenAI({
       apiKey: creds.custom.apiKey,
-    });
+    })
 
-    return { type: "success" };
-  };
+    return { type: 'success' }
+  }
 
-  dispose = () => {};
+  dispose = () => {
+  }
 
   getCurrentUser = (): CurrentUser => ({
-    id: SELF_ID,
+    id: `${this.currentUser.modelID}-${this.currentUser.apiKey}`, // should uuid or smth
     displayText: this.currentUser.username,
-  });
+    fullName: 'Human (You)',
+  })
 
-  serializeSession = () => {
-    return {
-      username: this.currentUser.username,
-      modelID: this.currentUser.modelID,
-      apiKey: this.currentUser.apiKey,
-    };
-  };
+  serializeSession = () => ({
+    id: `${this.currentUser.modelID}-${this.currentUser.apiKey}`, // should uuid or smth
+    username: this.currentUser.username,
+    modelID: this.currentUser.modelID,
+    apiKey: this.currentUser.apiKey,
+  })
 
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
-    this.eventHandler = onEvent;
-  };
+    this.eventHandler = onEvent
+  }
 
   getThreads = (inboxName: ThreadFolderName) => {
     if (inboxName === InboxName.REQUESTS) {
@@ -153,52 +125,64 @@ export default class ChatGPT implements PlatformAPI {
         items: [],
         hasMore: false,
         oldestCursor: undefined,
-      };
-    } else {
-      return {
-        items: this.threads.length
-          ? this.threads
-          : [genThread(this.currentUser.modelID)],
-        hasMore: false,
-        oldestCursor: undefined,
-      };
+      }
     }
-  };
+    return {
+      items: [...this.threads.values()],
+      hasMore: false,
+      oldestCursor: undefined,
+    }
+  }
 
   getMessages = async (
     threadID: string,
-    pagination: PaginationArg
-  ): Promise<Paginated<Message>> => {
-    return {
-      items: orderBy(this.messages, "timestamp"),
-      hasMore: false,
-    };
-  };
+    pagination: PaginationArg,
+  ): Promise<Paginated<Message>> => ({
+    items: orderBy(this.messages.get(threadID) || [], 'timestamp'),
+    hasMore: false,
+  })
 
-  // searchUsers = async () => {
-  //   return MODELS;
-  // };
+  searchUsers = async () => MODELS
 
-  // createThread = async (userIDs: UserID[], title: string, message: string) => {
-  //   const modelID = userIDs[0];
-  //   const model = MODELS.find((m) => m.id === modelID);
-  //   const thread = genThread(modelID);
-  //   this.threads.push(thread);
-  //   const threadID = thread.id;
-  //   return this.getThread(threadID);
-  // };
+  createThread = async (userIDs: UserID[], title: string, message: string) => {
+    const modelID = userIDs[0]
+    const thread: Thread = {
+      id: uuid(),
+      type: 'single',
+      timestamp: new Date(),
+      description: `Chat with ${modelID}`,
+      messages: {
+        items: [getDefaultMessage(modelID)],
+        hasMore: false,
+      },
+      participants: {
+        hasMore: false,
+        items: [
+          {
+            id: modelID,
+            fullName: `${MODELS.find(mdl => mdl.id === modelID).fullName} (${Date.now()})`,
+            imgURL: getModelImage(modelID),
+          },
+        ],
+      },
+      isUnread: false,
+      isReadOnly: false,
+      extra: {
+        aiModelId: modelID,
+      },
+    }
+    this.threads.set(thread.id, thread)
+    return thread
+  }
 
-  getThread = async (threadID: string) => {
-    const conv = this.threads.find((t) => t.id === threadID);
-    return conv;
-  };
+  getThread = async (threadID: string) => this.threads.get(threadID)
 
   sendMessage = async (
     threadID: string,
     content: MessageContent,
-    options: MessageSendOptions
+    options: MessageSendOptions,
   ) => {
-    const { text } = content;
+    const { text } = content
 
     const message: Message = {
       id: options.pendingMessageID,
@@ -207,103 +191,106 @@ export default class ChatGPT implements PlatformAPI {
       senderID: SELF_ID,
       isSender: true,
       isDelivered: true,
-    };
+    }
 
     this.eventHandler([
       {
         type: ServerEventType.USER_ACTIVITY,
         activityType: ActivityType.CUSTOM,
-        customLabel: "thinking",
+        customLabel: 'thinking',
         threadID,
-        participantID: "ai",
+        participantID: 'ai',
         durationMs: 30_000,
       },
-    ]);
+    ])
 
-    this.messages.push(message);
-    this.getAICompletion(this.currentUser.modelID);
+    const msgs = this.messages.get(threadID) || []
+    msgs.push(message)
+    this.messages.set(threadID, msgs)
+    this.getAICompletion(threadID)
 
-    return [message];
-  };
+    return [message]
+  }
 
-  getAICompletion = async (modelID: string) => {
+  getAICompletion = async (threadID: string) => {
     try {
+      const modelID = this.threads.get(threadID).extra?.aiModelId
       const res = await this.openai.chat.completions.create({
         model: modelID,
         stream: true,
-        messages: this.messages.map((m) => {
-          return {
-            role: m.senderID === SELF_ID ? "user" : "assistant",
-            content: m.text,
-          };
-        }),
-      });
+        messages: (this.messages.get(threadID) || []).map(m => ({
+          role: m.senderID === SELF_ID ? 'user' : 'assistant',
+          content: m.text,
+        })),
+      })
 
       const aiMessage = {
         id: uuid(),
         timestamp: new Date(),
-        text: "",
-        senderID: "ai",
+        text: '',
+        senderID: 'ai',
         isSender: false,
-      };
+      }
 
       const stream = OpenAIStream(res, {
         onStart: () => {
-          this.messages.push(aiMessage);
+          this.messages.get(threadID).push(aiMessage)
           this.eventHandler([
             {
               type: ServerEventType.STATE_SYNC,
-              objectName: "message",
-              mutationType: "upsert",
-              objectIDs: { threadID: this.currentUser.modelID },
-              entries: this.messages,
+              objectName: 'message',
+              mutationType: 'upsert',
+              objectIDs: { threadID },
+              entries: [aiMessage],
             },
-          ]);
+          ])
         },
-        onToken: (token) => {
-          this.messages[this.messages.length - 1].text += token;
+        onToken: token => {
+          aiMessage.text += token
           this.eventHandler([
             {
               type: ServerEventType.STATE_SYNC,
-              objectName: "message",
-              mutationType: "upsert",
-              objectIDs: { threadID: this.currentUser.modelID },
-              entries: this.messages,
+              objectName: 'message',
+              mutationType: 'upsert',
+              objectIDs: { threadID },
+              entries: [aiMessage],
             },
-          ]);
+          ])
         },
-      });
+      })
 
-      const response = new StreamingTextResponse(stream);
-      const text = await response.text();
-      return text;
+      const response = new StreamingTextResponse(stream)
+      const text = await response.text()
+      return text
     } catch (e) {
       const errorMessage = {
-        id: "error-" + uuid(),
+        id: 'error-' + uuid(),
         timestamp: new Date(),
-        text: "Error: " + e.message,
-        senderID: "none",
+        text: 'Error: ' + e.message,
+        senderID: 'none',
         isAction: true,
-      };
+      }
       this.eventHandler([
         {
           type: ServerEventType.USER_ACTIVITY,
           activityType: ActivityType.NONE,
           threadID: this.currentUser.modelID,
-          participantID: "ai",
+          participantID: 'ai',
         },
         {
           type: ServerEventType.STATE_SYNC,
-          objectName: "message",
-          mutationType: "upsert",
+          objectName: 'message',
+          mutationType: 'upsert',
           objectIDs: { threadID: this.currentUser.modelID },
           entries: [errorMessage],
         },
-      ]);
+      ])
     }
-  };
+  }
 
-  sendActivityIndicator = (threadId: string) => {};
+  sendActivityIndicator = (threadId: string) => {
+  }
 
-  sendReadReceipt = (threadId: string) => {};
+  sendReadReceipt = (threadId: string) => {
+  }
 }
