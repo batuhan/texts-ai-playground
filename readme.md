@@ -1,1 +1,1 @@
-# platform-test
+# platform-ai-playground

@@ -1,5 +1,5 @@
 {
-  "name": "@textshq/platform-test",
+  "name": "@textshq/platform-ai-playground",
   "version": "0.1.0",
   "main": "dist/index.js",
   "files": [
