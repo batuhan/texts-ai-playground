@@ -15,7 +15,6 @@ import {
   ServerEventType,
   Thread,
   ThreadFolderName,
-  texts,
   UserID,
 } from '@textshq/platform-sdk'
 import { orderBy } from 'lodash'
@@ -55,11 +54,11 @@ function getDefaultMessage(modelID: string): Message {
 }
 
 export default class ChatGPT implements PlatformAPI {
-  private currentUser: { username: string, modelID: string, apiKey: string } = {
-    username: null,
-    modelID: null,
-    apiKey: null,
-  }
+  private currentUser: CurrentUser
+
+  private provider = 'openai'
+
+  private apiKey: string
 
   private threads = new Map<Thread['id'], Thread>()
 
@@ -71,7 +70,8 @@ export default class ChatGPT implements PlatformAPI {
 
   init = (session: SerializedSession) => {
     if (session) {
-      this.currentUser = session
+      this.currentUser = session.user
+      this.provider = session.provider
       this.openai = new OpenAI({
         apiKey: session.apiKey,
       })
@@ -82,14 +82,16 @@ export default class ChatGPT implements PlatformAPI {
     const loginCreds = 'custom' in creds
       && creds.custom
       && creds.custom.apiKey
-      && creds.custom.modelID
-      && creds.custom.username
+      && creds.custom.provider
     if (!loginCreds) return { type: 'error', errorMessage: 'Invalid credentials' }
 
+    this.provider = creds.custom.provider
+    this.apiKey = creds.custom.apiKey
+    const displayText = `${creds.custom.provider} ${creds.custom.label}`
     this.currentUser = {
+      id: `${this.provider}-${this.apiKey}`, // should uuid or smth
+      displayText,
       username: creds.custom.username,
-      modelID: creds.custom.modelID,
-      apiKey: creds.custom.apiKey,
     }
 
     this.openai = new OpenAI({
@@ -99,20 +101,14 @@ export default class ChatGPT implements PlatformAPI {
     return { type: 'success' }
   }
 
-  dispose = () => {
-  }
+  dispose = () => {}
 
-  getCurrentUser = (): CurrentUser => ({
-    id: `${this.currentUser.modelID}-${this.currentUser.apiKey}`, // should uuid or smth
-    displayText: this.currentUser.username,
-    fullName: 'Human (You)',
-  })
+  getCurrentUser = () => this.currentUser
 
   serializeSession = () => ({
-    id: `${this.currentUser.modelID}-${this.currentUser.apiKey}`, // should uuid or smth
-    username: this.currentUser.username,
-    modelID: this.currentUser.modelID,
-    apiKey: this.currentUser.apiKey,
+    user: this.currentUser,
+    provider: this.provider,
+    apiKey: this.apiKey,
   })
 
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
@@ -274,14 +270,14 @@ export default class ChatGPT implements PlatformAPI {
         {
           type: ServerEventType.USER_ACTIVITY,
           activityType: ActivityType.NONE,
-          threadID: this.currentUser.modelID,
+          threadID,
           participantID: 'ai',
         },
         {
           type: ServerEventType.STATE_SYNC,
           objectName: 'message',
           mutationType: 'upsert',
-          objectIDs: { threadID: this.currentUser.modelID },
+          objectIDs: { threadID },
           entries: [errorMessage],
         },
       ])

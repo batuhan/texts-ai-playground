@@ -21,3 +21,21 @@ export const MODELS = [
     imgURL: OPENAI_GPT_4_SVG_DATA_URI,
   },
 ]
+
+export const PROVIDERS = [
+  {
+    id: 'openai',
+    fullName: 'OpenAI',
+    imgURL: OPENAI_SVG_DATA_URI,
+  },
+  // {
+  //   id: 'openai-azure',
+  //   fullName: 'OpenAI on Azure',
+  //   imgURL: OPENAI_SVG_DATA_URI,
+  // },
+  // {
+  //   id: 'ollama-codellama',
+  //   fullName: 'Ollama - Codellama',
+  //   imgURL: OPENAI_GPT_4_SVG_DATA_URI,
+  // },
+]

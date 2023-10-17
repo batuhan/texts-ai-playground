@@ -1,20 +1,19 @@
-import os from 'os'
 import type { AuthProps } from '@textshq/platform-sdk'
 import React from 'react'
-import { MODELS, OPENAI_SVG_DATA_URI } from './constants'
+import { PROVIDERS } from './constants'
 
 const auth: React.FC<AuthProps> = ({ login }) => {
-  const { username } = os.userInfo()
   const [apiKey, setApiKey] = React.useState('')
-  const [selectedModel, setSelectedModel] = React.useState('default')
+  const [label, setLabel] = React.useState('')
+  const [selectedProvider, setSelectedProvider] = React.useState('default')
 
   const handleLogin = () => {
-    if (apiKey !== '' && selectedModel !== 'default') {
+    if (apiKey !== '' && selectedProvider !== 'default') {
       login({
         custom: {
           apiKey,
-          modelID: selectedModel,
-          username,
+          provider: selectedProvider,
+          label,
         },
       })
     }
@@ -33,6 +32,56 @@ const auth: React.FC<AuthProps> = ({ login }) => {
           marginBottom: '20px',
         }}
       >
+
+        <div
+          style={{
+            width: '70%',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}
+        >
+          <label htmlFor="model">Provider</label>
+          <select
+            id="model"
+            style={{
+              width: '100%',
+              borderRadius: '8px',
+              height: '30px',
+              background: 'transparent',
+              color: selectedProvider === 'default' ? '#757575' : 'white',
+              padding: '5px',
+              borderColor: '#343434',
+              outline: 'none',
+            }}
+            value={selectedProvider}
+            onChange={event => setSelectedProvider(event.target.value)}
+          >
+            <option
+              value="default"
+              disabled
+              style={{
+                color: '#343434',
+                background: '#1c1c1c',
+                borderColor: '#343434',
+              }}
+              hidden
+            >
+              Select a provider
+            </option>
+            {PROVIDERS.map(provider => (
+              <option
+                value={provider.id}
+                style={{
+                  color: 'white',
+                  background: '#1c1c1c',
+                  borderColor: '#343434',
+                }}
+              >
+                {provider.fullName}
+              </option>
+            ))}
+          </select>
+        </div>
         <div
           style={{
             width: '70%',
@@ -53,51 +102,19 @@ const auth: React.FC<AuthProps> = ({ login }) => {
         <div
           style={{
             width: '70%',
-            marginLeft: 'auto',
-            marginRight: 'auto',
           }}
         >
-          <label htmlFor="model">AI Model</label>
-          <select
-            id="model"
-            style={{
-              width: '100%',
-              borderRadius: '8px',
-              height: '30px',
-              background: 'transparent',
-              color: selectedModel === 'default' ? '#757575' : 'white',
-              padding: '5px',
-              borderColor: '#343434',
-              outline: 'none',
-            }}
-            value={selectedModel}
-            onChange={event => setSelectedModel(event.target.value)}
-          >
-            <option
-              value="default"
-              disabled
-              style={{
-                color: '#343434',
-                background: '#1c1c1c',
-                borderColor: '#343434',
-              }}
-              hidden
-            >
-              Select an AI Model
-            </option>
-            {MODELS.map(model => (
-                <option
-                  value={model.id}
-                  style={{
-                    color: 'white',
-                    background: '#1c1c1c',
-                    borderColor: '#343434',
-                  }}
-                >
-                  {model.fullName}
-                </option>
-            ))}
-          </select>
+          <label htmlFor="label" style={{ width: '90%' }}>
+            Label (optional)
+          </label>
+          <input
+            id="label"
+            type="text"
+            value={label}
+            onChange={event => setLabel(event.target.value)}
+            style={{ width: '100%' }}
+            placeholder="Work, Personal, etc."
+          />
         </div>
         <div
           style={{
