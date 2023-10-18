@@ -98,7 +98,15 @@ const auth: React.FC<AuthProps> = ({ login }) => {
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
             style={{ width: "100%" }}
-            placeholder="Your OpenAI API Key"
+            placeholder={
+              selectedProvider === "default"
+                ? "Your OpenAI API Key"
+                : `Your ${
+                    PROVIDERS.find(
+                      (provider) => provider.id === selectedProvider
+                    )?.fullName
+                  } API Key`
+            }
           />
         </div>
         <div
@@ -142,63 +150,3 @@ const auth: React.FC<AuthProps> = ({ login }) => {
 };
 
 export default auth;
-
-/*
-type Status = 'none' | 'qrcode' | 'authenticating' | 'success'
-
-const instructions = (
-  <div className="list">
-    <div><span>1</span>Open the Signal app on your phone</div>
-    <div><span>2</span>Go to Settings → Linked Devices</div>
-    <div><span>3</span>Tap "Link New Device" on iPhone or the "+" button on Android</div>
-    <div><span>4</span>Scan the QR code with your phone</div>
-  </div>
-)
-
-export const AuthForm: React.FC<AuthProps> = ({ api, login }) => {
-  const [url, setUrl] = useState(null)
-  const [status, setStatus] = useState<Status>('none')
-  useEffect(() => {
-    api.onLoginEvent(({ type, data }) => {
-      switch (type) {
-        case 'link-url':
-          setStatus('qrcode')
-          setUrl(data)
-          break
-        case 'link-authenticating':
-          setStatus('authenticating')
-          break
-        case 'link-success':
-          setStatus('success')
-          login({ username: data, password: undefined })
-          break
-        default:
-      }
-    })
-    api.login()
-  }, [api])
-  const children = (() => {
-    switch (status) {
-      case 'authenticating':
-        return <div style={{ textAlign: 'center' }}>Authenticating...</div>
-      case 'success':
-        return <div style={{ textAlign: 'center' }}>Authenticated, loading...</div>
-      case 'qrcode':
-      default:
-        return (
-          <>
-            {instructions}
-            <QRCode value={url} />
-            {(process.platform as string) === 'ios' && <button onClick={() => window.open(url)}>Link with Signal.app</button>}
-          </>
-        )
-    }
-  })()
-  return (
-    <div>
-      {children}
-      <footer>Signal doesn't transfer your conversation history to new linked devices for security.</footer>
-    </div>
-  )
-}
- */

@@ -172,6 +172,11 @@ export default class ChatGPT implements PlatformAPI {
       extra: {
         aiModelId: modelID,
         titleGenerated: false,
+        temperature: 0.9,
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0.6,
+        max_tokens: 100,
       },
     };
     this.threads.set(thread.id, thread);
@@ -186,6 +191,61 @@ export default class ChatGPT implements PlatformAPI {
     options: MessageSendOptions
   ) => {
     const { text } = content;
+    const modelID = this.threads.get(threadID).extra?.aiModelId;
+
+    if (!text) return false;
+    if (text.startsWith("/set")) {
+      const [_, key, value] = text.split(" ");
+      if (
+        ![
+          "temperature",
+          "top_p",
+          "frequency_penalty",
+          "presence_penalty",
+          "max_tokens",
+        ].includes(key)
+      ) {
+        texts.log(`invalid key : ${key}`);
+        return false;
+      }
+
+      this.sendCommandMessage(threadID, `Set ${key} to ${value}`);
+      this.threads.get(threadID).extra[key] = +value;
+      return true;
+    }
+    if (["/clear", "/reset"].includes(text)) {
+      this.messages.set(threadID, [getDefaultMessage(modelID)]);
+      this.threads.get(threadID).extra.titleGenerated = false;
+      return true;
+    }
+    if (text.startsWith("/help")) {
+      this.sendCommandMessage(
+        threadID,
+        `/clear reset the conversation
+        \n/params shows the current parameters 
+        \n/set temperature 0.9 
+        \n/set top_p 1 
+        \n/set frequency_penalty 0 
+        \n/set presence_penalty 0.6 
+        \n/set max_tokens 100`
+      );
+      return true;
+    }
+    if (text.startsWith("/params")) {
+      this.sendCommandMessage(
+        threadID,
+        `temperature: ${
+          this.threads.get(threadID).extra.temperature
+        } \ntop_p: ${
+          this.threads.get(threadID).extra.top_p
+        } \nfrequency_penalty: ${
+          this.threads.get(threadID).extra.frequency_penalty
+        } \npresence_penalty: ${
+          this.threads.get(threadID).extra.presence_penalty
+        } \nmax_tokens: ${this.threads.get(threadID).extra.max_tokens}`
+      );
+      return true;
+    }
 
     const message: Message = {
       id: options.pendingMessageID,
@@ -195,7 +255,6 @@ export default class ChatGPT implements PlatformAPI {
       isSender: true,
       isDelivered: true,
     };
-    const modelID = this.threads.get(threadID).extra?.aiModelId;
 
     this.eventHandler([
       {
@@ -223,7 +282,8 @@ export default class ChatGPT implements PlatformAPI {
 
   getAIChatCompletion = async (threadID: string) => {
     try {
-      const modelID = this.threads.get(threadID).extra?.aiModelId;
+      const extras = this.threads.get(threadID).extra;
+      const modelID = extras.aiModelId;
       const res = await this.openai.chat.completions.create({
         model: modelID,
         stream: true,
@@ -231,6 +291,13 @@ export default class ChatGPT implements PlatformAPI {
           role: m.senderID === SELF_ID ? "user" : "assistant",
           content: m.text,
         })),
+        frequency_penalty: extras.frequency_penalty
+          ? extras.frequency_penalty
+          : 0,
+        presence_penalty: extras.presence_penalty ? extras.presence_penalty : 0,
+        max_tokens: extras.max_tokens ? extras.max_tokens : 100,
+        temperature: extras.temperature ? extras.temperature : 0.9,
+        top_p: extras.top_p ? extras.top_p : 1,
       });
 
       const aiMessage = {
@@ -307,12 +374,28 @@ export default class ChatGPT implements PlatformAPI {
     }
   };
 
+  sendCommandMessage = async (threadID: string, text: string) => {
+    const modelID = this.threads.get(threadID).extra?.aiModelId;
+    const message: Message = {
+      id: uuid(),
+      timestamp: new Date(),
+      text,
+      senderID: SELF_ID,
+      isSender: true,
+      isAction: true,
+    };
+
+    const msgs = this.messages.get(threadID) || [getDefaultMessage(modelID)];
+    msgs.push(message);
+    this.messages.set(threadID, msgs);
+  };
+
   generateTitle = async (threadID: string, firstUserPrompt: string) => {
     try {
       const res = await this.openai.completions.create({
         model: "gpt-3.5-turbo-instruct",
         prompt:
-          "Generate a 25 characters long title for this prompt:" +
+          "Generate a maximum of 25 characters long, brief title with this prompt which will be used as the conversation title. Prompt:" +
           firstUserPrompt,
         stream: true,
       });
