@@ -1774,31 +1774,32 @@ __metadata:
   resolution: "@textshq/platform-ai-playground@workspace:."
   dependencies:
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
-    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main"
+    "@textshq/platform-sdk": "file: ~/../../platform-sdk/"
     "@types/chance": ^1.1.3
     "@types/eslint": ^8.4.10
     "@types/lodash": ^4.14.184
     "@types/node": ^18.7.13
     "@types/react": ^17.0.43
-    ai: ^2.2.15
+    ai: 2.2.16
     chance: ^1.1.8
     date-fns: ^2.29.2
     eslint: ^8.30.0
     got: ^11.0.0
     lodash: ^4.17.21
     openai: ^4.12.3
-    react: "https://github.com/TextsHQ/react-global-shim#main"
+    react: "file: ~/../../react-global-shim-main/"
+    replicate: 0.19.0
     typescript: ^5.0.2
   languageName: unknown
   linkType: soft
 
-"@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk#main":
+"@textshq/platform-sdk@file: ~/../../platform-sdk/::locator=%40textshq%2Fplatform-ai-playground%40workspace%3A.":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@https://github.com/TextsHQ/platform-sdk.git#commit=238cd082bec928c2a6130ea3d4d1d63b34bb7df6"
+  resolution: "@textshq/platform-sdk@file: ~/../../platform-sdk/# ~/../../platform-sdk/::hash=899edc&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
   dependencies:
     emoji-regex: ^10.1.0
     qrcode.react: ^3.1.0
-  checksum: 1a018cbe95429eec97b52b68eccc539480785297d0ba19fc8fc308a5586f6f9777a442790b9912905d6f79b827b630bc5d335931c4e82d971f5a1186f5f6d663
+  checksum: b22f0a55ea7582da8d97306c0b81d10e5f0a8d4ff20e41516861dc84eef779d80606bf92653761fe26c0db0b8291d067225818a5980b9055b96a51befd38bd0c
   languageName: node
   linkType: hard
 
@@ -2117,9 +2118,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ai@npm:^2.2.15":
-  version: 2.2.15
-  resolution: "ai@npm:2.2.15"
+"ai@npm:2.2.16":
+  version: 2.2.16
+  resolution: "ai@npm:2.2.16"
   dependencies:
     eventsource-parser: 1.0.0
     nanoid: 3.3.6
@@ -2142,7 +2143,7 @@ __metadata:
       optional: true
     vue:
       optional: true
-  checksum: 83911a8804b9566c200d8446890f0370ae4bb2fedc4b7812d21bc1433b1ba2bf76ee04af593b567ead189e17c65e3e09ce6a4025e8e0c8e6b94fb543371c7ba3
+  checksum: ced8bebb5ce3fd1e03e539420d1d0e31ed5cad184ee4f5470ffd215a6edfec5be179abba2491c5580cdb53ca8e9a7df323e29dc392457ce334666b5c21340962
   languageName: node
   linkType: hard
 
@@ -4661,10 +4662,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react@https://github.com/TextsHQ/react-global-shim#main":
+"react@file: ~/../../react-global-shim-main/::locator=%40textshq%2Fplatform-ai-playground%40workspace%3A.":
   version: 17.0.0
-  resolution: "react@https://github.com/TextsHQ/react-global-shim.git#commit=35fabb45d5e0c10a934e93a8e04a8cf5bcad8836"
-  checksum: 89a088bfbda1ffc4fc1b7a79c8afabd02f084f45ef6ae4ee50449f321f0c51662133e3da7c8e9827310df6eb3d8347b95fe62508c569af20c2dba0ef1c29a2e3
+  resolution: "react@file: ~/../../react-global-shim-main/# ~/../../react-global-shim-main/::hash=e09bbf&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
+  checksum: 766ef7332d679cffdc5b8732af3f6b90db96c3e396cddfef343268a4cef3d1f2f509b0f21fc92b656a9da3a430e8b4fa9718a42f9f0389c08744c370b989a204
   languageName: node
   linkType: hard
 
@@ -4747,6 +4748,13 @@ __metadata:
   bin:
     regjsparser: bin/parser
   checksum: 5e1b76afe8f1d03c3beaf9e0d935dd467589c3625f6d65fb8ffa14f224d783a0fed4bf49c2c1b8211043ef92b6117313419edf055a098ed8342e340586741afc
+  languageName: node
+  linkType: hard
+
+"replicate@npm:0.19.0":
+  version: 0.19.0
+  resolution: "replicate@npm:0.19.0"
+  checksum: 24626f99aaa1b7bfa4b23ecf7784e212c3cb1e257fe924274ce8a5937c138b41ba71f420ea28a7a47366ab3f7922e8810c252945a257f3635a6e85e17ce213b0
   languageName: node
   linkType: hard
 
