@@ -1,10 +1,8 @@
 import type { AuthProps } from "@textshq/platform-sdk";
-import os from "os";
 import React from "react";
 import { PROVIDERS } from "./constants";
 
 const auth: React.FC<AuthProps> = ({ login }) => {
-  const { username } = os.userInfo();
   const [apiKey, setApiKey] = React.useState("");
   const [label, setLabel] = React.useState("");
   const [selectedProvider, setSelectedProvider] = React.useState("default");
@@ -16,7 +14,6 @@ const auth: React.FC<AuthProps> = ({ login }) => {
           apiKey,
           provider: selectedProvider,
           label,
-          username,
         },
       });
     }

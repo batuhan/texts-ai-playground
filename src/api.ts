@@ -127,7 +127,7 @@ export default class ChatGPT implements PlatformAPI {
     this.currentUser = {
       id: `${this.provider}-${this.apiKey}`, // should uuid or smth
       displayText,
-      username: creds.custom.username,
+      username: "User",
     };
     this.initProvider(creds.custom.provider);
 
