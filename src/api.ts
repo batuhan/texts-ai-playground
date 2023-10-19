@@ -260,7 +260,7 @@ export default class ChatGPT implements PlatformAPI {
       );
       return true;
     }
-    if (text.startsWith("/params")) {
+    if (text.startsWith("/params") || text.startsWith("/param")) {
       this.sendCommandMessage(
         threadID,
         `${validOpts.map((k) => `\n${k} : ${extras[k]}`).join("")}`

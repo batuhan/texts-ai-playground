@@ -141,6 +141,31 @@ const auth: React.FC<AuthProps> = ({ login }) => {
             Start Chatting →
           </button>
         </div>
+        <div
+          style={{
+            width: "90%",
+            marginLeft: "auto",
+            marginRight: "auto",
+            marginTop: "10px",
+            fontSize: "14px",
+          }}
+        >
+          <div>
+            <code>/clear</code> or <code>/reset</code> - reset the conversation
+          </div>
+          <div>
+            <code>/params</code> or <code>/param</code> - see current parameters
+          </div>
+          <div>
+            <code>
+              /set {`<param>`} {`<value>`}
+            </code>{" "}
+            - change a parameter
+          </div>
+          <div>
+            <code>/help</code> - see available commands
+          </div>
+        </div>
       </div>
     </div>
   );
