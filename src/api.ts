@@ -39,6 +39,7 @@ import {
   getModelOptions,
   mapMessagesToPrompt,
   mapTextToPrompt,
+  trimFirstSpace,
 } from "./mappers";
 import { AIProviderID, ModelType, PromptType } from "./types";
 
@@ -291,6 +292,9 @@ export default class ChatGPT implements PlatformAPI {
             ]);
           },
           onToken: (token) => {
+            if (aiMessage.text[0] === " ") {
+              aiMessage.text = aiMessage.text.substring(1);
+            }
             aiMessage.text += token;
             this.eventHandler([
               {
@@ -329,6 +333,9 @@ export default class ChatGPT implements PlatformAPI {
             ]);
           },
           onToken: (token) => {
+            if (aiMessage.text[0] === " ") {
+              aiMessage.text = aiMessage.text.substring(1);
+            }
             aiMessage.text += token;
             this.eventHandler([
               {
