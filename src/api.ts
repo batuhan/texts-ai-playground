@@ -39,7 +39,6 @@ import {
   getModelOptions,
   mapMessagesToPrompt,
   mapTextToPrompt,
-  trimFirstSpace,
 } from "./mappers";
 import { AIProviderID, ModelType, PromptType } from "./types";
 
