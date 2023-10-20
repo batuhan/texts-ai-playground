@@ -21,71 +21,26 @@ import {
 import { orderBy } from "lodash";
 import OpenAI from "openai";
 import { randomUUID as uuid } from "crypto";
-import { OpenAIStream, ReplicateStream, StreamingTextResponse } from "ai";
-import { experimental_buildLlama2Prompt } from "ai/prompts";
 import {
-  MODELS,
-  SELF_ID,
-  OPENAI_GPT_4_SVG_DATA_URI,
-  OPENAI_SVG_DATA_URI,
-  META_BLACK_SVG_DATA_URI,
-  META_BLUE_SVG_DATA_URI,
-} from "./constants";
+  AIStreamCallbacksAndOptions,
+  HuggingFaceStream,
+  OpenAIStream,
+  ReplicateStream,
+  StreamingTextResponse,
+} from "ai";
+import { MODELS, SELF_ID } from "./constants";
 import Replicate from "replicate";
 import { ChatCompletionMessage } from "openai/resources";
-
-function getModelImage(modelID: string) {
-  switch (modelID) {
-    case "gpt-3.5-turbo":
-    case "gpt-3.5-turbo-16k":
-      return OPENAI_SVG_DATA_URI;
-    case "gpt-4":
-      return OPENAI_GPT_4_SVG_DATA_URI;
-    case "accounts/fireworks/models/llama-v2-7b-chat":
-    case "accounts/fireworks/models/llama-v2-13b-code":
-      return META_BLACK_SVG_DATA_URI;
-    case "accounts/fireworks/models/llama-v2-34b-code-instruct":
-    case "accounts/fireworks/models/llama-v2-70b-chat":
-      return META_BLUE_SVG_DATA_URI;
-    default:
-      return OPENAI_SVG_DATA_URI;
-  }
-}
-
-function getDefaultMessage(modelID: string, provider: string): Message {
-  return {
-    id: uuid(),
-    timestamp: new Date(),
-    text: `This is the start of your conversation with ${
-      MODELS.find((mdl) => mdl.provider === provider).models.find(
-        (mdl) => mdl.id === modelID
-      ).fullName
-    }. You can ask it anything you want!`,
-    senderID: "action",
-    isSender: false,
-    isAction: true,
-    threadID: modelID,
-  };
-}
-
-type AIOptions =
-  | {
-      temperature: number;
-      top_p: number;
-      frequency_penalty: number;
-      presence_penalty: number;
-      max_tokens: number;
-    }
-  | {
-      temperature: number;
-      top_p: number;
-      max_new_tokens: number;
-    }
-  | {
-      temperature: number;
-      top_p: number;
-      max_tokens: number;
-    };
+import { HfInference } from "@huggingface/inference";
+import {
+  getDefaultMessage,
+  getModelImage,
+  getModelInfo,
+  getModelOptions,
+  mapMessagesToPrompt,
+  mapTextToPrompt,
+} from "./mappers";
+import { AIProviderID, ModelType, PromptType } from "./types";
 
 export default class ChatGPT implements PlatformAPI {
   private currentUser: CurrentUser;
@@ -100,6 +55,7 @@ export default class ChatGPT implements PlatformAPI {
 
   private openai: OpenAI;
   private replicate: Replicate;
+  private huggingface: HfInference;
 
   private eventHandler: OnServerEventCallback;
 
@@ -176,7 +132,9 @@ export default class ChatGPT implements PlatformAPI {
 
   createThread = async (userIDs: UserID[], title: string, message: string) => {
     const modelID = userIDs[0];
-    const options = this.getModelOptions(modelID);
+    const options = getModelOptions(modelID);
+    const modelInfo = getModelInfo(modelID, this.provider as AIProviderID);
+
     const thread: Thread = {
       id: uuid(),
       type: "single",
@@ -205,6 +163,7 @@ export default class ChatGPT implements PlatformAPI {
       extra: {
         aiModelId: modelID,
         titleGenerated: false,
+        ...modelInfo,
         ...options,
       },
     };
@@ -222,7 +181,7 @@ export default class ChatGPT implements PlatformAPI {
     const { text } = content;
     const modelID = this.threads.get(threadID).extra?.aiModelId;
 
-    // if (!text) return false;
+    if (!text) return false;
     if (["/clear", "/reset"].includes(text)) {
       this.messages.set(threadID, [getDefaultMessage(modelID, this.provider)]);
       this.threads.get(threadID).extra.titleGenerated = false;
@@ -231,9 +190,11 @@ export default class ChatGPT implements PlatformAPI {
 
     const validOpts = Array.from(
       Object.keys(this.threads.get(threadID).extra)
-    ).filter((k) => !["aiModelId", "titleGenerated"].includes(k));
+    ).filter(
+      (k) =>
+        !["aiModelId", "titleGenerated", "promptType", "modelType"].includes(k)
+    );
     const extras = this.threads.get(threadID).extra;
-
     if (text.startsWith("/set")) {
       const [_, key, value] = text.split(" ");
 
@@ -269,6 +230,7 @@ export default class ChatGPT implements PlatformAPI {
     }
 
     const message: Message = {
+      _original: JSON.stringify(text),
       id: options.pendingMessageID,
       timestamp: new Date(),
       text,
@@ -291,7 +253,107 @@ export default class ChatGPT implements PlatformAPI {
     const msgs = this.messages.get(threadID) || [];
     msgs.push(message);
     this.messages.set(threadID, msgs);
-    this.getAIChatCompletion(threadID);
+
+    // Need to make sure state is updated beforehand so that certain providers give the results in the right order
+    this.eventHandler([
+      {
+        type: ServerEventType.STATE_SYNC,
+        objectName: "message",
+        mutationType: "upsert",
+        objectIDs: { threadID },
+        entries: [message],
+      },
+    ]);
+
+    const aiMessage: Message = {
+      id: uuid(),
+      timestamp: new Date(),
+      text: " ",
+      senderID: "ai",
+      isSender: false,
+    };
+
+    const modelType = extras.modelType as ModelType;
+
+    switch (modelType) {
+      case "chat":
+        this.getAIChatCompletion(threadID, {
+          onStart: () => {
+            this.messages.get(threadID).push(aiMessage);
+            this.eventHandler([
+              {
+                type: ServerEventType.STATE_SYNC,
+                objectName: "message",
+                mutationType: "upsert",
+                objectIDs: { threadID },
+                entries: [aiMessage],
+              },
+            ]);
+          },
+          onToken: (token) => {
+            aiMessage.text += token;
+            this.eventHandler([
+              {
+                type: ServerEventType.STATE_SYNC,
+                objectName: "message",
+                mutationType: "upsert",
+                objectIDs: { threadID },
+                entries: [aiMessage],
+              },
+            ]);
+          },
+          onCompletion: () => {
+            this.eventHandler([
+              {
+                type: ServerEventType.USER_ACTIVITY,
+                activityType: ActivityType.NONE,
+                threadID,
+                participantID: modelID,
+              },
+            ]);
+          },
+        });
+        break;
+      case "completion":
+        this.getAICompletion(text, threadID, {
+          onStart: () => {
+            this.messages.get(threadID).push(aiMessage);
+            this.eventHandler([
+              {
+                type: ServerEventType.STATE_SYNC,
+                objectName: "message",
+                mutationType: "upsert",
+                objectIDs: { threadID },
+                entries: [aiMessage],
+              },
+            ]);
+          },
+          onToken: (token) => {
+            aiMessage.text += token;
+            this.eventHandler([
+              {
+                type: ServerEventType.STATE_SYNC,
+                objectName: "message",
+                mutationType: "upsert",
+                objectIDs: { threadID },
+                entries: [aiMessage],
+              },
+            ]);
+          },
+          onCompletion: (completion) => {
+            this.eventHandler([
+              {
+                type: ServerEventType.USER_ACTIVITY,
+                activityType: ActivityType.NONE,
+                threadID,
+                participantID: modelID,
+              },
+            ]);
+          },
+        });
+      default:
+        break;
+    }
 
     const titleGenerated = this.threads.get(threadID).extra?.titleGenerated;
     if (!titleGenerated) {
@@ -301,202 +363,182 @@ export default class ChatGPT implements PlatformAPI {
     return [message];
   };
 
-  getAIChatCompletion = async (threadID: string) => {
+  getAIChatCompletion = async (
+    threadID: string,
+    callbacks: AIStreamCallbacksAndOptions,
+    modelID?: string
+  ) => {
     try {
       const extras = this.threads.get(threadID).extra;
-      const modelID = extras.aiModelId;
-      const aiMessage = {
-        id: uuid(),
-        timestamp: new Date(),
-        text: "",
-        senderID: "ai",
-        isSender: false,
-      };
-      const options = this.getModelOptions(modelID, threadID);
-      const msgs = (this.messages.get(threadID) || [])
-        .filter((msg) => {
-          return msg.senderID === "ai" || msg.senderID === SELF_ID;
-        })
-        .map((m) => ({
-          role: m.senderID === SELF_ID ? "user" : "assistant",
-          content: m.text,
-        })) as ChatCompletionMessage[];
+      const selectedModelID = modelID ? modelID : extras.aiModelId;
+      const options = getModelOptions(selectedModelID, extras);
+      const promptType: PromptType = extras.promptType;
+      const msgs = mapMessagesToPrompt(this.messages.get(threadID), promptType);
 
       switch (this.provider) {
         case "openai":
           const openaiResponse = await this.openai.chat.completions.create({
-            model: modelID,
+            model: selectedModelID,
             stream: true,
-            messages: msgs,
+            messages: msgs as ChatCompletionMessage[],
             ...options,
           });
 
-          const openaiStream = OpenAIStream(openaiResponse, {
-            onStart: () => {
-              this.messages.get(threadID).push(aiMessage);
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  objectName: "message",
-                  mutationType: "upsert",
-                  objectIDs: { threadID },
-                  entries: [aiMessage],
-                },
-              ]);
-            },
-            onToken: (token) => {
-              aiMessage.text += token;
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  objectName: "message",
-                  mutationType: "upsert",
-                  objectIDs: { threadID },
-                  entries: [aiMessage],
-                },
-              ]);
-            },
-            onCompletion: () => {
-              this.eventHandler([
-                {
-                  type: ServerEventType.USER_ACTIVITY,
-                  activityType: ActivityType.NONE,
-                  threadID,
-                  participantID: modelID,
-                },
-              ]);
-            },
-          });
-
+          const openaiStream = OpenAIStream(openaiResponse, callbacks);
           const openaiResult = new StreamingTextResponse(openaiStream);
           await openaiResult.text();
           break;
         case "replicate":
           const replicateResponse = await this.replicate.predictions.create({
             stream: true,
-            version: modelID,
+            version: selectedModelID,
             // Format the message list into the format expected by Llama 2
             // @see https://github.com/vercel/ai/blob/99cf16edf0a09405d15d3867f997c96a8da869c6/packages/core/prompts/huggingface.ts#L53C1-L78C2
             input: {
-              prompt: experimental_buildLlama2Prompt(msgs),
+              prompt: msgs,
               ...options,
             },
           });
 
-          const replicateStream = await ReplicateStream(replicateResponse, {
-            onStart: () => {
-              this.messages.get(threadID).push(aiMessage);
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  objectName: "message",
-                  mutationType: "upsert",
-                  objectIDs: { threadID },
-                  entries: [aiMessage],
-                },
-              ]);
-            },
-            onToken: (token) => {
-              texts.log(token);
-              aiMessage.text += token;
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  objectName: "message",
-                  mutationType: "upsert",
-                  objectIDs: { threadID },
-                  entries: [aiMessage],
-                },
-              ]);
-            },
-            onCompletion: () => {
-              this.eventHandler([
-                {
-                  type: ServerEventType.USER_ACTIVITY,
-                  activityType: ActivityType.NONE,
-                  threadID,
-                  participantID: modelID,
-                },
-              ]);
-            },
-          });
-
+          const replicateStream = await ReplicateStream(
+            replicateResponse,
+            callbacks
+          );
           const replicateResult = new StreamingTextResponse(replicateStream);
           await replicateResult.text();
           break;
         case "fireworks":
           const fireworksResponse = await this.openai.chat.completions.create({
-            model: modelID,
+            model: selectedModelID,
             stream: true,
-            messages: msgs,
+            messages: msgs as ChatCompletionMessage[],
             ...options,
           });
 
-          const fireworksStream = OpenAIStream(fireworksResponse, {
-            onStart: () => {
-              this.messages.get(threadID).push(aiMessage);
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  objectName: "message",
-                  mutationType: "upsert",
-                  objectIDs: { threadID },
-                  entries: [aiMessage],
-                },
-              ]);
-            },
-            onToken: (token) => {
-              aiMessage.text += token;
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  objectName: "message",
-                  mutationType: "upsert",
-                  objectIDs: { threadID },
-                  entries: [aiMessage],
-                },
-              ]);
-            },
-            onCompletion: () => {
-              this.eventHandler([
-                {
-                  type: ServerEventType.USER_ACTIVITY,
-                  activityType: ActivityType.NONE,
-                  threadID,
-                  participantID: modelID,
-                },
-              ]);
-            },
-          });
-
+          const fireworksStream = OpenAIStream(fireworksResponse, callbacks);
           const fireworksResult = new StreamingTextResponse(fireworksStream);
           await fireworksResult.text();
           break;
+        case "huggingface":
+          const huggingfaceResponse = this.huggingface.textGenerationStream({
+            model: selectedModelID,
+            inputs: msgs as string,
+            parameters: {
+              ...options,
+            },
+          });
+
+          const huggingfaceStream = HuggingFaceStream(
+            huggingfaceResponse,
+            callbacks
+          );
+          const huggingfaceResult = new StreamingTextResponse(
+            huggingfaceStream
+          );
+          await huggingfaceResult.text();
+          break;
       }
     } catch (e) {
-      const errorMessage = {
-        id: "error-" + uuid(),
-        timestamp: new Date(),
-        text: "Error: " + e.message,
-        senderID: "none",
-        isAction: true,
-      };
-      this.eventHandler([
-        {
-          type: ServerEventType.USER_ACTIVITY,
-          activityType: ActivityType.NONE,
-          threadID,
-          participantID: "ai",
-        },
-        {
-          type: ServerEventType.STATE_SYNC,
-          objectName: "message",
-          mutationType: "upsert",
-          objectIDs: { threadID },
-          entries: [errorMessage],
-        },
-      ]);
+      this.sendError(threadID, e);
     }
+  };
+
+  getAICompletion = async (
+    userInput: string,
+    threadID: string,
+    callbacks: AIStreamCallbacksAndOptions,
+    modelID?: string
+  ) => {
+    try {
+      const extras = this.threads.get(threadID).extra;
+      const prompt = mapTextToPrompt(userInput, modelID);
+      const options = getModelOptions(modelID, extras);
+
+      switch (this.provider) {
+        case "openai":
+          const openaiResponse = await this.openai.completions.create({
+            model: modelID ? modelID : extras.aiModelId,
+            stream: true,
+            prompt: prompt,
+            ...options,
+          });
+
+          const openaiStream = OpenAIStream(openaiResponse, callbacks);
+          const openaiResult = new StreamingTextResponse(openaiStream);
+          await openaiResult.text();
+          break;
+        case "replicate":
+          const replicateResponse = await this.replicate.predictions.create({
+            stream: true,
+            version: modelID ? modelID : extras.aiModelId,
+            input: {
+              prompt: prompt,
+            },
+          });
+
+          const replicateStream = await ReplicateStream(
+            replicateResponse,
+            callbacks
+          );
+          const replicateResult = new StreamingTextResponse(replicateStream);
+          await replicateResult.text();
+          break;
+        case "fireworks":
+          const fireworksResponse = await this.openai.completions.create({
+            model: modelID ? modelID : extras.aiModelId,
+            stream: true,
+            prompt: prompt,
+            ...options,
+          });
+
+          const fireworksStream = OpenAIStream(fireworksResponse, callbacks);
+          const fireworksResult = new StreamingTextResponse(fireworksStream);
+          await fireworksResult.text();
+          break;
+        case "huggingface":
+          const huggingfaceResponse = this.huggingface.textGenerationStream({
+            model: modelID ? modelID : extras.aiModelId,
+            inputs: prompt,
+          });
+
+          const huggingfaceStream = HuggingFaceStream(
+            huggingfaceResponse,
+            callbacks
+          );
+          const huggingfaceResult = new StreamingTextResponse(
+            huggingfaceStream
+          );
+          await huggingfaceResult.text();
+          break;
+      }
+    } catch (e) {
+      this.sendError(threadID, e);
+    }
+  };
+
+  sendError = (threadID: string, e: any) => {
+    const errorMessage = {
+      id: "error-" + uuid(),
+      timestamp: new Date(),
+      text: "Error: " + e.message ? e.message : e,
+      senderID: "none",
+      isAction: true,
+    };
+    this.eventHandler([
+      {
+        type: ServerEventType.USER_ACTIVITY,
+        activityType: ActivityType.NONE,
+        threadID,
+        participantID: "ai",
+      },
+      {
+        type: ServerEventType.STATE_SYNC,
+        objectName: "message",
+        mutationType: "upsert",
+        objectIDs: { threadID },
+        entries: [errorMessage],
+      },
+    ]);
   };
 
   sendCommandMessage = async (threadID: string, text: string) => {
@@ -519,240 +561,209 @@ export default class ChatGPT implements PlatformAPI {
 
   generateTitle = async (threadID: string, firstUserPrompt: string) => {
     let generatedTitle = "";
+    const prompt =
+      "Generate a title for this conversation. Your response must be only the title. Consider the first message of user to be this :" +
+      firstUserPrompt;
 
     try {
       switch (this.provider) {
         case "openai":
-          const openaiResponse = await this.openai.completions.create({
-            model: "gpt-3.5-turbo-instruct",
-            prompt:
-              "Generate a maximum of 25 characters long, brief title with this prompt which will be used as the conversation title. Prompt:" +
-              firstUserPrompt,
-            stream: true,
-          });
-
-          // This is a Vercel/AI type error, it should be fine
-          // @ts-ignore
-          const openaiStream = OpenAIStream(openaiResponse, {
-            onStart: () => {
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  mutationType: "update",
-                  objectName: "thread",
-                  objectIDs: {},
-                  entries: [
-                    {
-                      id: threadID,
-                      title: generatedTitle,
-                    },
-                  ],
-                },
-              ]);
-            },
-            onToken: (token) => {
-              generatedTitle += token.includes(`"`)
-                ? token.replaceAll(`"`, "")
-                : token;
-
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  mutationType: "update",
-                  objectName: "thread",
-                  objectIDs: {},
-                  entries: [
-                    {
-                      id: threadID,
-                      title: generatedTitle.trim(),
-                    },
-                  ],
-                },
-              ]);
-            },
-            onCompletion: (completion) => {
-              this.threads.get(threadID).extra.titleGenerated = true;
-            },
-          });
-
-          const openaiResult = new StreamingTextResponse(openaiStream);
-          const openaiText = await openaiResult.text();
-          return openaiText;
-        case "replicate":
-          const replicateResponse = await this.replicate.predictions.create({
-            version:
-              "543b4e2b623ad7983a1889c4847fa017ed92276a1d6639d80414a5f1d26587ef",
-            input: {
-              prompt:
-                "Generate a maximum of 25 characters long, brief title with this prompt which will be used as the conversation title. Prompt:" +
-                firstUserPrompt,
-            },
-            stream: true,
-          });
-
-          const replicateStream = await ReplicateStream(replicateResponse, {
-            onStart: async () => {
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  mutationType: "update",
-                  objectName: "thread",
-                  objectIDs: {},
-                  entries: [
-                    {
-                      id: threadID,
-                      title: generatedTitle,
-                    },
-                  ],
-                },
-              ]);
-            },
-            onToken: async (token) => {
-              texts.log(token);
-              generatedTitle += token.includes(`"`)
-                ? token.replaceAll(`"`, "")
-                : token;
-
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  mutationType: "update",
-                  objectName: "thread",
-                  objectIDs: {},
-                  entries: [
-                    {
-                      id: threadID,
-                      title: generatedTitle.trim(),
-                    },
-                  ],
-                },
-              ]);
-            },
-            onCompletion: async (completion) => {
-              this.threads.get(threadID).extra.titleGenerated = true;
-            },
-          });
-
-          const replicateResult = new StreamingTextResponse(replicateStream);
-          const replicateText = await replicateResult.text();
-          return replicateText;
-        case "fireworks":
-          const fireworksResponse = await this.openai.chat.completions.create({
-            model: "accounts/fireworks/models/llama-v2-13b-chat",
-            messages: [
-              {
-                role: "user",
-                content:
-                  "Generate a title for this conversation. Your response must be only the title. Consider the first message of user to be this :" +
-                  firstUserPrompt,
+          this.getAICompletion(
+            prompt,
+            threadID,
+            {
+              onStart: () => {
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle,
+                      },
+                    ],
+                  },
+                ]);
               },
-            ],
-            stream: true,
-            n: 1,
-            max_tokens: 150,
-            temperature: 0.1,
-            top_p: 0.9,
-          });
+              onToken: (token) => {
+                generatedTitle += token.includes(`"`)
+                  ? token.replaceAll(`"`, "")
+                  : token;
 
-          let genStarted = false;
-          // @ts-ignore
-          const fireworksStream = OpenAIStream(fireworksResponse, {
-            onStart: () => {
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  mutationType: "update",
-                  objectName: "thread",
-                  objectIDs: {},
-                  entries: [
-                    {
-                      id: threadID,
-                      title: generatedTitle,
-                    },
-                  ],
-                },
-              ]);
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle.trim(),
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onCompletion: (completion) => {
+                this.threads.get(threadID).extra.titleGenerated = true;
+              },
             },
-            onToken: (token) => {
-              // Extracting the title generated between the quotes
-              if (token.includes(`"`)) {
-                genStarted = !genStarted;
-                generatedTitle += token.replace(`"`, "");
-              } else if (genStarted) {
-                generatedTitle += token;
-              }
+            "gpt-3.5-turbo-instruct"
+          );
+          break;
+        case "replicate":
+          this.getAICompletion(
+            prompt,
+            threadID,
+            {
+              onStart: async () => {
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle,
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onToken: async (token) => {
+                generatedTitle += token.includes(`"`)
+                  ? token.replaceAll(`"`, "")
+                  : token;
 
-              this.eventHandler([
-                {
-                  type: ServerEventType.STATE_SYNC,
-                  mutationType: "update",
-                  objectName: "thread",
-                  objectIDs: {},
-                  entries: [
-                    {
-                      id: threadID,
-                      title: generatedTitle.trim(),
-                    },
-                  ],
-                },
-              ]);
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle.trim(),
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onCompletion: async (completion) => {
+                this.threads.get(threadID).extra.titleGenerated = true;
+              },
             },
-            onCompletion: () => {
-              this.threads.get(threadID).extra.titleGenerated = true;
-            },
-          });
+            "543b4e2b623ad7983a1889c4847fa017ed92276a1d6639d80414a5f1d26587ef"
+          );
+          break;
+        case "fireworks":
+          this.getAICompletion(
+            prompt,
+            threadID,
+            {
+              onStart: () => {
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle,
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onToken: (token) => {
+                if (generatedTitle.length < 25) {
+                  generatedTitle += token.includes(`"`)
+                    ? token.replaceAll(`"`, "")
+                    : token;
+                }
 
-          const fireworksResult = new StreamingTextResponse(fireworksStream);
-          const fireworksText = await fireworksResult.text();
-          return fireworksText;
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle.trim(),
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onCompletion: () => {
+                this.threads.get(threadID).extra.titleGenerated = true;
+              },
+            },
+            "accounts/fireworks/models/llama-v2-13b"
+          );
+          break;
+        case "huggingface":
+          this.getAICompletion(
+            prompt,
+            threadID,
+            {
+              onStart: () => {
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle,
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onToken: (token) => {
+                generatedTitle += token.includes(`"`)
+                  ? token.replaceAll(`"`, "")
+                  : token;
+
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle.trim(),
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onCompletion: () => {
+                this.threads.get(threadID).extra.titleGenerated = true;
+              },
+            },
+            "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5"
+          );
+          break;
       }
     } catch (e) {
       texts.log(e);
-    }
-  };
-
-  getModelOptions = (modelID: string, threadID?: string): AIOptions => {
-    const extras = threadID && this.threads.get(threadID).extra;
-
-    switch (modelID) {
-      case "gpt-3.5-turbo":
-      case "gpt-3.5-turbo-16k":
-      case "gpt-4":
-      case "code-llama-13b":
-        return {
-          temperature: extras && extras.temperature ? extras.temperature : 0.9,
-          top_p: extras && extras.top_p ? extras.top_p : 1,
-          frequency_penalty:
-            extras && extras.frequency_penalty ? extras.frequency_penalty : 0,
-          presence_penalty:
-            extras && extras.presence_penalty ? extras.presence_penalty : 0,
-          max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
-        };
-      case "llama-2-7b-chat":
-        return {
-          temperature: extras && extras.temperature ? extras.temperature : 0.75,
-          top_p: extras && extras.top_p ? extras.top_p : 1,
-          max_new_tokens: extras && extras.max_tokens ? extras.max_tokens : 100,
-        };
-      case "accounts/fireworks/models/llama-v2-7b-chat":
-      case "accounts/fireworks/models/llama-v2-70b-chat":
-      case "accounts/fireworks/models/llama-v2-13b-code-instruct":
-      case "accounts/fireworks/models/llama-v2-34b-code-instruct":
-        return {
-          temperature: extras && extras.temperature ? extras.temperature : 0.9,
-          top_p: extras && extras.top_p ? extras.top_p : 1,
-          max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
-        };
-      default:
-        return {
-          temperature: extras && extras.temperature ? extras.temperature : 0.9,
-          top_p: extras && extras.top_p ? extras.top_p : 1,
-          frequency_penalty:
-            extras && extras.frequency_penalty ? extras.frequency_penalty : 0,
-          presence_penalty:
-            extras && extras.presence_penalty ? extras.presence_penalty : 0,
-          max_tokens: extras && extras.max_tokens ? extras.max_tokens : 100,
-        };
     }
   };
 
@@ -773,6 +784,9 @@ export default class ChatGPT implements PlatformAPI {
           apiKey: this.apiKey,
           baseURL: "https://api.fireworks.ai/inference/v1",
         });
+        break;
+      case "huggingface":
+        this.huggingface = new HfInference(this.apiKey);
         break;
       default:
         this.openai = new OpenAI({

@@ -11,6 +11,7 @@
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
+    "@huggingface/inference": "^2.6.4",
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/",
     "ai": "2.2.16",
     "chance": "^1.1.8",

@@ -1626,6 +1626,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@huggingface/inference@npm:^2.6.4":
+  version: 2.6.4
+  resolution: "@huggingface/inference@npm:2.6.4"
+  checksum: 7d48960a62d0621d4c3f1edd183aa5d7829d297110b5720c78291aac17ed58b6a9af8eaf8a3f2cbb9dabfda3cf48931f59cf491cdedefd624f90d93fa3927981
+  languageName: node
+  linkType: hard
+
 "@humanwhocodes/config-array@npm:^0.11.11":
   version: 0.11.11
   resolution: "@humanwhocodes/config-array@npm:0.11.11"
@@ -1773,6 +1780,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@textshq/platform-ai-playground@workspace:."
   dependencies:
+    "@huggingface/inference": ^2.6.4
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/"
     "@types/chance": ^1.1.3
@@ -1788,7 +1796,7 @@ __metadata:
     lodash: ^4.17.21
     openai: ^4.12.3
     react: "file: ~/../../react-global-shim-main/"
-    replicate: 0.19.0
+    replicate: ^0.20.1
     typescript: ^5.0.2
   languageName: unknown
   linkType: soft
@@ -4751,10 +4759,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"replicate@npm:0.19.0":
-  version: 0.19.0
-  resolution: "replicate@npm:0.19.0"
-  checksum: 24626f99aaa1b7bfa4b23ecf7784e212c3cb1e257fe924274ce8a5937c138b41ba71f420ea28a7a47366ab3f7922e8810c252945a257f3635a6e85e17ce213b0
+"replicate@npm:^0.20.1":
+  version: 0.20.1
+  resolution: "replicate@npm:0.20.1"
+  checksum: a671b1b6c4f5cce26a8eeca85719167eaff89c6275489fe96312657d8027c5f38607cee3bba62d5a74a48f0c76d2bed5e67b0c0883644ebd30877dc2c878b42e
   languageName: node
   linkType: hard
 
