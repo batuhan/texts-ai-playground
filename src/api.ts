@@ -37,10 +37,17 @@ import {
   getModelImage,
   getModelInfo,
   getModelOptions,
+  getProviderName,
   mapMessagesToPrompt,
   mapTextToPrompt,
 } from "./mappers";
-import { AIProviderID, ModelType, PromptType } from "./types";
+import {
+  AIProviderID,
+  CohereChatCompletionMessage,
+  ModelType,
+  PromptType,
+} from "./types";
+import CohereAPI, { processReadable } from "./cohere";
 
 export default class ChatGPT implements PlatformAPI {
   private currentUser: CurrentUser;
@@ -56,6 +63,7 @@ export default class ChatGPT implements PlatformAPI {
   private openai: OpenAI;
   private replicate: Replicate;
   private huggingface: HfInference;
+  private cohere: CohereAPI;
 
   private eventHandler: OnServerEventCallback;
 
@@ -79,7 +87,9 @@ export default class ChatGPT implements PlatformAPI {
 
     this.provider = creds.custom.provider;
     this.apiKey = creds.custom.apiKey;
-    const displayText = `${creds.custom.provider} ${creds.custom.label}`;
+    const displayText = `${getProviderName(creds.custom.provider)} ${
+      creds.custom.label
+    }`;
     this.currentUser = {
       id: `${this.provider}-${this.apiKey}`, // should uuid or smth
       displayText,
@@ -305,7 +315,7 @@ export default class ChatGPT implements PlatformAPI {
               },
             ]);
           },
-          onCompletion: () => {
+          onFinal: () => {
             this.eventHandler([
               {
                 type: ServerEventType.USER_ACTIVITY,
@@ -346,7 +356,7 @@ export default class ChatGPT implements PlatformAPI {
               },
             ]);
           },
-          onCompletion: (completion) => {
+          onCompletion: () => {
             this.eventHandler([
               {
                 type: ServerEventType.USER_ACTIVITY,
@@ -443,6 +453,20 @@ export default class ChatGPT implements PlatformAPI {
           );
           await huggingfaceResult.text();
           break;
+        case "cohere":
+          const lastUserMessage = msgs[
+            msgs.length - 1
+          ] as CohereChatCompletionMessage;
+          const cohereResponse = await this.cohere.chat.create({
+            model: selectedModelID,
+            stream: true,
+            prompt: lastUserMessage.message,
+            messages: msgs as CohereChatCompletionMessage[],
+            temperature: 0.5,
+          });
+
+          await processReadable(cohereResponse, callbacks);
+          break;
       }
     } catch (e) {
       this.sendError(threadID, e);
@@ -515,6 +539,16 @@ export default class ChatGPT implements PlatformAPI {
             huggingfaceStream
           );
           await huggingfaceResult.text();
+          break;
+        case "cohere":
+          const cohereResponse = await this.cohere.completions.create({
+            model: modelID ? modelID : extras.aiModelId,
+            stream: true,
+            prompt,
+            ...options,
+          });
+
+          await processReadable(cohereResponse, callbacks);
           break;
       }
     } catch (e) {
@@ -614,7 +648,7 @@ export default class ChatGPT implements PlatformAPI {
                   },
                 ]);
               },
-              onCompletion: (completion) => {
+              onFinal: (completion) => {
                 this.threads.get(threadID).extra.titleGenerated = true;
               },
             },
@@ -662,7 +696,7 @@ export default class ChatGPT implements PlatformAPI {
                   },
                 ]);
               },
-              onCompletion: async (completion) => {
+              onFinal: async (completion) => {
                 this.threads.get(threadID).extra.titleGenerated = true;
               },
             },
@@ -712,7 +746,7 @@ export default class ChatGPT implements PlatformAPI {
                   },
                 ]);
               },
-              onCompletion: () => {
+              onFinal: () => {
                 this.threads.get(threadID).extra.titleGenerated = true;
               },
             },
@@ -760,11 +794,59 @@ export default class ChatGPT implements PlatformAPI {
                   },
                 ]);
               },
-              onCompletion: () => {
+              onFinal: () => {
                 this.threads.get(threadID).extra.titleGenerated = true;
               },
             },
             "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5"
+          );
+          break;
+        case "cohere":
+          this.getAICompletion(
+            prompt,
+            threadID,
+            {
+              onStart: () => {
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle,
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onToken: (token) => {
+                generatedTitle += token.includes(`"`)
+                  ? token.replaceAll(`"`, "")
+                  : token;
+
+                this.eventHandler([
+                  {
+                    type: ServerEventType.STATE_SYNC,
+                    mutationType: "update",
+                    objectName: "thread",
+                    objectIDs: {},
+                    entries: [
+                      {
+                        id: threadID,
+                        title: generatedTitle.trim(),
+                      },
+                    ],
+                  },
+                ]);
+              },
+              onFinal: () => {
+                this.threads.get(threadID).extra.titleGenerated = true;
+              },
+            },
+            "command"
           );
           break;
       }
@@ -793,6 +875,9 @@ export default class ChatGPT implements PlatformAPI {
         break;
       case "huggingface":
         this.huggingface = new HfInference(this.apiKey);
+        break;
+      case "cohere":
+        this.cohere = new CohereAPI(this.apiKey);
         break;
       default:
         this.openai = new OpenAI({

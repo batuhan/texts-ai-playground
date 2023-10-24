@@ -7,9 +7,17 @@ import {
   META_BLUE_SVG_DATA_URI,
   HUGGINGFACE_SVG_DATA_URI,
   SELF_ID,
+  COHERE_SVG_DATA_URI,
+  PROVIDERS,
 } from "./constants";
 import { randomUUID as uuid } from "crypto";
-import { AIOptions, AIProviderID, PromptType } from "./types";
+import {
+  AIOptions,
+  AIProvider,
+  AIProviderID,
+  CohereChatCompletionMessage,
+  PromptType,
+} from "./types";
 import { ChatCompletionMessage } from "openai/resources";
 import {
   experimental_buildLlama2Prompt,
@@ -34,6 +42,11 @@ export function getModelImage(modelID: string) {
     case "bigcode/starcoder":
     case "mistralai/Mistral-7B-v0.1":
       return HUGGINGFACE_SVG_DATA_URI;
+    case "command/chat":
+    case "command-light/chat":
+    case "command":
+    case "command-light":
+      return COHERE_SVG_DATA_URI;
     default:
       return OPENAI_SVG_DATA_URI;
   }
@@ -90,6 +103,20 @@ export function getModelOptions(modelID: string, extras?: any): AIOptions {
         top_p: extras && extras.top_p ? extras.top_p : 1,
         max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
       };
+    case "command":
+    case "command-light":
+    case "command/chat":
+    case "command-light/chat":
+      return {
+        temperature: extras && extras.temperature ? extras.temperature : 0.75,
+        max_tokens: extras && extras.max_tokens ? extras.max_tokens : 100,
+        frequency_penalty:
+          extras && extras.frequency_penalty ? extras.frequency_penalty : 0,
+        presence_penalty:
+          extras && extras.presence_penalty ? extras.presence_penalty : 0,
+        k: extras && extras.k ? extras.k : 0,
+        p: extras && extras.p ? extras.p : 0,
+      };
     default:
       return {
         temperature: extras && extras.temperature ? extras.temperature : 0.9,
@@ -101,6 +128,10 @@ export function getModelOptions(modelID: string, extras?: any): AIOptions {
         max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
       };
   }
+}
+
+export function getProviderName(providerID: AIProviderID) {
+  return PROVIDERS.find((prv: AIProvider) => prv.id === providerID).fullName;
 }
 
 export function getModelInfo(modelID: string, provider: AIProviderID) {
@@ -117,7 +148,7 @@ export function getModelInfo(modelID: string, provider: AIProviderID) {
 export function mapMessagesToPrompt(
   messages: Message[],
   promptType?: PromptType
-) {
+): string | ChatCompletionMessage[] | CohereChatCompletionMessage[] {
   const msgs = (messages || [])
     .filter((msg) => {
       return msg.senderID === "ai" || msg.senderID === SELF_ID;
@@ -135,12 +166,25 @@ export function mapMessagesToPrompt(
         return experimental_buildLlama2Prompt(msgs);
       case "starchat":
         return experimental_buildStarChatBetaPrompt(msgs);
+      case "cohere":
+        return buildCohereChatPrompt(msgs);
       case "default":
         return msgs;
       default:
         return msgs;
     }
   }
+}
+
+export function buildCohereChatPrompt(
+  messages: ChatCompletionMessage[]
+): CohereChatCompletionMessage[] {
+  return messages.map((msg) => {
+    return {
+      message: msg.content,
+      role: msg.role === "user" ? "USER" : "CHATBOT",
+    };
+  });
 }
 
 export function mapTextToPrompt(userInput: string, modelID: string) {
