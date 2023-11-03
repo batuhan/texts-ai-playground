@@ -25,33 +25,6 @@ import {
   experimental_buildStarChatBetaPrompt,
 } from "ai/prompts";
 
-export function getModelImage(modelID: string) {
-  switch (modelID) {
-    case "gpt-3.5-turbo":
-    case "gpt-3.5-turbo-16k":
-      return OPENAI_SVG_DATA_URI;
-    case "gpt-4":
-      return OPENAI_GPT_4_SVG_DATA_URI;
-    case "accounts/fireworks/models/llama-v2-7b-chat":
-    case "accounts/fireworks/models/llama-v2-13b-code":
-      return META_BLACK_SVG_DATA_URI;
-    case "accounts/fireworks/models/llama-v2-34b-code-instruct":
-    case "accounts/fireworks/models/llama-v2-70b-chat":
-      return META_BLUE_SVG_DATA_URI;
-    case "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5":
-    case "bigcode/starcoder":
-    case "mistralai/Mistral-7B-v0.1":
-      return HUGGINGFACE_SVG_DATA_URI;
-    case "command/chat":
-    case "command-light/chat":
-    case "command":
-    case "command-light":
-      return COHERE_SVG_DATA_URI;
-    default:
-      return OPENAI_SVG_DATA_URI;
-  }
-}
-
 export function getDefaultMessage(modelID: string, provider: string): Message {
   return {
     id: uuid(),
@@ -142,6 +115,7 @@ export function getModelInfo(modelID: string, provider: AIProviderID) {
   return {
     promptType: info.promptType,
     modelType: info.modelType,
+    modelImage: info.imgURL,
   };
 }
 

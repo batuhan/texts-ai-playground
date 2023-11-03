@@ -125,6 +125,7 @@ export async function processReadable(
       const jsonString = chunk.toString();
       const parsed = tryParseJSON(jsonString);
       const ct = response.headers["content-type"];
+      // If the content-type is application/json, then the response is an error
       if (ct && ct.includes("application/json")) {
         isError = true;
         completion = parsed.message;

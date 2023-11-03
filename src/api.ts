@@ -34,7 +34,6 @@ import { ChatCompletionMessage } from "openai/resources";
 import { HfInference } from "@huggingface/inference";
 import {
   getDefaultMessage,
-  getModelImage,
   getModelInfo,
   getModelOptions,
   getProviderName,
@@ -164,7 +163,7 @@ export default class ChatGPT implements PlatformAPI {
                 (mdl) => mdl.id === modelID
               ).fullName
             } (${Date.now()})`,
-            imgURL: getModelImage(modelID),
+            imgURL: modelInfo.modelImage,
           },
         ],
       },
@@ -173,7 +172,8 @@ export default class ChatGPT implements PlatformAPI {
       extra: {
         aiModelId: modelID,
         titleGenerated: false,
-        ...modelInfo,
+        promptType: modelInfo.promptType,
+        modelType: modelInfo.modelType,
         ...options,
       },
     };
@@ -191,13 +191,16 @@ export default class ChatGPT implements PlatformAPI {
     const { text } = content;
     const modelID = this.threads.get(threadID).extra?.aiModelId;
 
+    // If the user sends and empty message, return an error
     if (!text) return false;
+    // Clears the conversation if the user sends /clear or /reset
     if (["/clear", "/reset"].includes(text)) {
       this.messages.set(threadID, [getDefaultMessage(modelID, this.provider)]);
       this.threads.get(threadID).extra.titleGenerated = false;
       return true;
     }
 
+    // Extract the valid options for the current model from extras
     const validOpts = Array.from(
       Object.keys(this.threads.get(threadID).extra)
     ).filter(
@@ -205,9 +208,12 @@ export default class ChatGPT implements PlatformAPI {
         !["aiModelId", "titleGenerated", "promptType", "modelType"].includes(k)
     );
     const extras = this.threads.get(threadID).extra;
+
+    // If the user sends /set, set the value as the new option value
     if (text.startsWith("/set")) {
       const [_, key, value] = text.split(" ");
 
+      // If the key is not valid, return an error
       if (!validOpts.includes(key)) {
         this.sendCommandMessage(
           threadID,
@@ -222,6 +228,7 @@ export default class ChatGPT implements PlatformAPI {
       return true;
     }
 
+    // If the user sends /help, return the list of available commands
     if (text.startsWith("/help")) {
       this.sendCommandMessage(
         threadID,
@@ -231,10 +238,16 @@ export default class ChatGPT implements PlatformAPI {
       );
       return true;
     }
+
+    // If the user sends /params, return the list of available parameters
     if (text.startsWith("/params") || text.startsWith("/param")) {
       this.sendCommandMessage(
         threadID,
-        `${validOpts.map((k) => `\n${k} : ${extras[k]}`).join("")}`
+        `${validOpts
+          .map((k, ix) =>
+            ix === 0 ? `${k} : ${extras[k]}` : `\n${k} : ${extras[k]}`
+          )
+          .join("")}`
       );
       return true;
     }
@@ -285,92 +298,89 @@ export default class ChatGPT implements PlatformAPI {
 
     const modelType = extras.modelType as ModelType;
 
-    switch (modelType) {
-      case "chat":
-        this.getAIChatCompletion(threadID, {
-          onStart: () => {
-            this.messages.get(threadID).push(aiMessage);
-            this.eventHandler([
-              {
-                type: ServerEventType.STATE_SYNC,
-                objectName: "message",
-                mutationType: "upsert",
-                objectIDs: { threadID },
-                entries: [aiMessage],
-              },
-            ]);
-          },
-          onToken: (token) => {
-            if (aiMessage.text[0] === " ") {
-              aiMessage.text = aiMessage.text.substring(1);
-            }
-            aiMessage.text += token;
-            this.eventHandler([
-              {
-                type: ServerEventType.STATE_SYNC,
-                objectName: "message",
-                mutationType: "upsert",
-                objectIDs: { threadID },
-                entries: [aiMessage],
-              },
-            ]);
-          },
-          onFinal: () => {
-            this.eventHandler([
-              {
-                type: ServerEventType.USER_ACTIVITY,
-                activityType: ActivityType.NONE,
-                threadID,
-                participantID: modelID,
-              },
-            ]);
-          },
-        });
-        break;
-      case "completion":
-        this.getAICompletion(text, threadID, {
-          onStart: () => {
-            this.messages.get(threadID).push(aiMessage);
-            this.eventHandler([
-              {
-                type: ServerEventType.STATE_SYNC,
-                objectName: "message",
-                mutationType: "upsert",
-                objectIDs: { threadID },
-                entries: [aiMessage],
-              },
-            ]);
-          },
-          onToken: (token) => {
-            if (aiMessage.text[0] === " ") {
-              aiMessage.text = aiMessage.text.substring(1);
-            }
-            aiMessage.text += token;
-            this.eventHandler([
-              {
-                type: ServerEventType.STATE_SYNC,
-                objectName: "message",
-                mutationType: "upsert",
-                objectIDs: { threadID },
-                entries: [aiMessage],
-              },
-            ]);
-          },
-          onCompletion: () => {
-            this.eventHandler([
-              {
-                type: ServerEventType.USER_ACTIVITY,
-                activityType: ActivityType.NONE,
-                threadID,
-                participantID: modelID,
-              },
-            ]);
-          },
-        });
-      default:
-        break;
+    if (modelType === "chat") {
+      this.getAIChatCompletion(threadID, {
+        onStart: () => {
+          this.messages.get(threadID).push(aiMessage);
+          this.eventHandler([
+            {
+              type: ServerEventType.STATE_SYNC,
+              objectName: "message",
+              mutationType: "upsert",
+              objectIDs: { threadID },
+              entries: [aiMessage],
+            },
+          ]);
+        },
+        onToken: (token) => {
+          if (aiMessage.text[0] === " ") {
+            aiMessage.text = aiMessage.text.substring(1);
+          }
+          aiMessage.text += token;
+          this.eventHandler([
+            {
+              type: ServerEventType.STATE_SYNC,
+              objectName: "message",
+              mutationType: "upsert",
+              objectIDs: { threadID },
+              entries: [aiMessage],
+            },
+          ]);
+        },
+        onFinal: () => {
+          this.eventHandler([
+            {
+              type: ServerEventType.USER_ACTIVITY,
+              activityType: ActivityType.NONE,
+              threadID,
+              participantID: modelID,
+            },
+          ]);
+        },
+      });
+    } else if (modelType === "completion") {
+      this.getAICompletion(text, threadID, {
+        onStart: () => {
+          this.messages.get(threadID).push(aiMessage);
+          this.eventHandler([
+            {
+              type: ServerEventType.STATE_SYNC,
+              objectName: "message",
+              mutationType: "upsert",
+              objectIDs: { threadID },
+              entries: [aiMessage],
+            },
+          ]);
+        },
+        onToken: (token) => {
+          if (aiMessage.text[0] === " ") {
+            aiMessage.text = aiMessage.text.substring(1);
+          }
+          aiMessage.text += token;
+          this.eventHandler([
+            {
+              type: ServerEventType.STATE_SYNC,
+              objectName: "message",
+              mutationType: "upsert",
+              objectIDs: { threadID },
+              entries: [aiMessage],
+            },
+          ]);
+        },
+        onCompletion: () => {
+          this.eventHandler([
+            {
+              type: ServerEventType.USER_ACTIVITY,
+              activityType: ActivityType.NONE,
+              threadID,
+              participantID: modelID,
+            },
+          ]);
+        },
+      });
     }
 
+    // Generate a title for the conversation if it hasn't been done yet
     const titleGenerated = this.threads.get(threadID).extra?.titleGenerated;
     if (!titleGenerated) {
       this.generateTitle(threadID, text);
@@ -823,6 +833,7 @@ export default class ChatGPT implements PlatformAPI {
                 ]);
               },
               onToken: (token) => {
+                // Some models generate title between quotes, so we remove them if they exist
                 generatedTitle += token.includes(`"`)
                   ? token.replaceAll(`"`, "")
                   : token;

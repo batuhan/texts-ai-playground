@@ -50,21 +50,6 @@ export const MODELS: AIProviderModel[] = [
       },
     ],
   },
-  // {
-  //   provider: "replicate",
-  //   models: [
-  //     {
-  //       id: "2c1608e18606fad2812020dc541930f2d0495ce32eee50074220b87300bc16e1",
-  //       fullName: "Llama v2 70B Chat",
-  //       imgURL: META_SVG_DATA_URI,
-  //     },
-  //     {
-  //       id: "cc618fca92404570b9c10d1a4fb5321f4faff54a514189751ee8d6543db64c8f",
-  //       fullName: "Codellama 13B",
-  //       imgURL: META_SVG_DATA_URI,
-  //     },
-  //   ],
-  // },
   {
     provider: "fireworks",
     models: [
@@ -158,18 +143,13 @@ export const MODELS: AIProviderModel[] = [
     ],
   },
 ];
-//bigcode/starcoder
+
 export const PROVIDERS: AIProvider[] = [
   {
     id: "openai",
     fullName: "OpenAI",
     imgURL: OPENAI_SVG_DATA_URI,
   },
-  // {
-  //   id: "replicate",
-  //   fullName: "Replicate",
-  //   imgURL: REPLICATE_SVG_DATA_URI,
-  // },
   {
     id: "fireworks",
     fullName: "Fireworks.ai",
@@ -185,16 +165,6 @@ export const PROVIDERS: AIProvider[] = [
     fullName: "Cohere",
     imgURL: COHERE_SVG_DATA_URI,
   },
-  // {
-  //   id: 'openai-azure',
-  //   fullName: 'OpenAI on Azure',
-  //   imgURL: OPENAI_SVG_DATA_URI,
-  // },
-  // {
-  //   id: 'ollama-codellama',
-  //   fullName: 'Ollama - Codellama',
-  //   imgURL: OPENAI_GPT_4_SVG_DATA_URI,
-  // },
 ];
 
 export const COHERE_BASE_URL = "https://api.cohere.ai";
