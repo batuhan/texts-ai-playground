@@ -132,18 +132,14 @@ export async function processReadable(
       }
       // Has event type if request is sent to /chat
       if (parsed.event_type) {
-        switch (parsed.event_type) {
-          case "stream-start":
-            cb.onStart && cb.onStart();
-            break;
-          case "text-generation":
-            cb.onToken && cb.onToken(parsed.text);
-            completion += parsed.text;
-            break;
-          case "stream-end":
-            cb.onCompletion && cb.onCompletion(completion);
-            cb.onFinal && cb.onFinal(parsed.text);
-            break;
+        if (parsed.event_type === "stream-start") {
+          cb.onStart && cb.onStart();
+        } else if (parsed.event_type === "text-generation") {
+          cb.onToken && cb.onToken(parsed.text);
+          completion += parsed.text;
+        } else if (parsed.event_type === "stream-end") {
+          cb.onCompletion && cb.onCompletion(completion);
+          cb.onFinal && cb.onFinal(parsed.text);
         }
         // Has is_finished and text if request is sent to /generate
       } else {

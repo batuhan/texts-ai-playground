@@ -516,7 +516,7 @@ export default class ChatGPT implements PlatformAPI {
     try {
       const thread = this.threads.get(threadID);
       const extras = thread?.extra;
-      const selectedModelID = modelID ?? extras.aiModelId;
+      const selectedModelID = modelID ?? extras.aiModelId as string;
       const prompt = mapTextToPrompt(userInput, modelID);
       const options = getModelOptions(
         selectedModelID,
