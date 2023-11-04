@@ -31,6 +31,7 @@ export type PromptType =
   | "starchat"
   | "cohere"
   | "default";
+  
 export type ModelType = "chat" | "completion";
 
 export type AIProviderModel = {
@@ -44,9 +45,15 @@ export type AIModel = {
   imgURL: string;
   promptType: PromptType;
   modelType: ModelType;
+  options: AIOptions;
 };
 
-export type AIProviderID = "openai" | "fireworks" | "huggingface" | "cohere";
+export type AIProviderID =
+  | "openai"
+  | "fireworks"
+  | "huggingface"
+  | "cohere"
+  | "replicate";
 
 export type AIProvider = {
   id: AIProviderID;
@@ -55,6 +62,6 @@ export type AIProvider = {
 };
 
 export type CohereChatCompletionMessage = {
-  message: string;
+  message: string | null;
   role: "USER" | "CHATBOT";
 };

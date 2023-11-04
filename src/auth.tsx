@@ -8,7 +8,7 @@ const auth: React.FC<AuthProps> = ({ login }) => {
   const [selectedProvider, setSelectedProvider] = React.useState("default");
 
   const handleLogin = () => {
-    if (apiKey !== "" && selectedProvider !== "default") {
+    if (apiKey && selectedProvider !== "default") {
       login({
         custom: {
           apiKey,
@@ -158,7 +158,7 @@ const auth: React.FC<AuthProps> = ({ login }) => {
           </div>
           <div>
             <code>
-              /set {`<param>`} {`<value>`}
+              /set <em>param</em> <em>value</em>
             </code>{" "}
             - change a parameter
           </div>

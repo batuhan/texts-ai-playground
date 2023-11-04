@@ -1,15 +1,5 @@
-import { Message } from "@textshq/platform-sdk";
-import {
-  MODELS,
-  OPENAI_GPT_4_SVG_DATA_URI,
-  OPENAI_SVG_DATA_URI,
-  META_BLACK_SVG_DATA_URI,
-  META_BLUE_SVG_DATA_URI,
-  HUGGINGFACE_SVG_DATA_URI,
-  SELF_ID,
-  COHERE_SVG_DATA_URI,
-  PROVIDERS,
-} from "./constants";
+import { Message, texts } from "@textshq/platform-sdk";
+import { MODELS, SELF_ID, PROVIDERS, ASSISTANT_ID } from "./constants";
 import { randomUUID as uuid } from "crypto";
 import {
   AIOptions,
@@ -25,15 +15,21 @@ import {
   experimental_buildStarChatBetaPrompt,
 } from "ai/prompts";
 
-export function getDefaultMessage(modelID: string, provider: string): Message {
+export function getDefaultMessage(
+  modelID: string,
+  provider: AIProviderID
+): Message {
+  const providerModels = MODELS.find(
+    (mdl) => mdl.provider === provider
+  )?.models;
+  const fullName =
+    providerModels &&
+    providerModels.find((mdl) => mdl.id === modelID)?.fullName;
+
   return {
     id: uuid(),
     timestamp: new Date(),
-    text: `This is the start of your conversation with ${
-      MODELS.find((mdl) => mdl.provider === provider).models.find(
-        (mdl) => mdl.id === modelID
-      ).fullName
-    }. You can ask it anything you want!`,
+    text: `This is the start of your conversation with ${fullName}. You can ask it anything you want!`,
     senderID: "action",
     isSender: false,
     isAction: true,
@@ -41,81 +37,52 @@ export function getDefaultMessage(modelID: string, provider: string): Message {
   };
 }
 
-export function getModelOptions(modelID: string, extras?: any): AIOptions {
-  switch (modelID) {
-    case "gpt-3.5-turbo":
-    case "gpt-3.5-turbo-16k":
-    case "gpt-4":
-    case "code-llama-13b":
-    case "gpt-3.5-turbo-instruct":
-      return {
-        temperature: extras && extras.temperature ? extras.temperature : 0.9,
-        top_p: extras && extras.top_p ? extras.top_p : 1,
-        frequency_penalty:
-          extras && extras.frequency_penalty ? extras.frequency_penalty : 0,
-        presence_penalty:
-          extras && extras.presence_penalty ? extras.presence_penalty : 0,
-        max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
-      };
-    case "llama-2-7b-chat":
-    case "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5":
-    case "bigcode/starcoder":
-    case "mistralai/Mistral-7B-v0.1":
-      return {
-        temperature: extras && extras.temperature ? extras.temperature : 0.75,
-        top_p: extras && extras.top_p ? extras.top_p : 0.9,
-        max_new_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
-      };
-    case "accounts/fireworks/models/llama-v2-13b":
-    case "accounts/fireworks/models/llama-v2-7b-chat":
-    case "accounts/fireworks/models/llama-v2-70b-chat":
-    case "accounts/fireworks/models/llama-v2-13b-code-instruct":
-    case "accounts/fireworks/models/llama-v2-34b-code-instruct":
-      return {
-        temperature: extras && extras.temperature ? extras.temperature : 0.9,
-        top_p: extras && extras.top_p ? extras.top_p : 1,
-        max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
-      };
-    case "command":
-    case "command-light":
-    case "command/chat":
-    case "command-light/chat":
-      return {
-        temperature: extras && extras.temperature ? extras.temperature : 0.75,
-        max_tokens: extras && extras.max_tokens ? extras.max_tokens : 100,
-        frequency_penalty:
-          extras && extras.frequency_penalty ? extras.frequency_penalty : 0,
-        presence_penalty:
-          extras && extras.presence_penalty ? extras.presence_penalty : 0,
-        k: extras && extras.k ? extras.k : 0,
-        p: extras && extras.p ? extras.p : 0,
-      };
-    default:
-      return {
-        temperature: extras && extras.temperature ? extras.temperature : 0.9,
-        top_p: extras && extras.top_p ? extras.top_p : 1,
-        frequency_penalty:
-          extras && extras.frequency_penalty ? extras.frequency_penalty : 0,
-        presence_penalty:
-          extras && extras.presence_penalty ? extras.presence_penalty : 0,
-        max_tokens: extras && extras.max_tokens ? extras.max_tokens : 250,
-      };
-  }
+export function getModelOptions(
+  modelID: string,
+  provider: AIProviderID,
+  currentOptions?: AIOptions
+): AIOptions {
+  const providerModels = MODELS.find(
+    (mdl) => mdl.provider === provider
+  )?.models;
+  const model =
+    providerModels && providerModels.find((mdl) => mdl.id === modelID);
+
+  if (!model) throw new Error(`Model ${modelID} not found`);
+
+  const defaultOptions = model.options;
+  const options = { ...defaultOptions, ...(currentOptions || {}) };
+
+  return options;
 }
 
 export function getProviderName(providerID: AIProviderID) {
-  return PROVIDERS.find((prv: AIProvider) => prv.id === providerID).fullName;
+  const provider = PROVIDERS.find(
+    (provider: AIProvider) => provider.id === providerID
+  );
+
+  if (!provider) {
+    throw new Error(`Provider ${providerID} not found`);
+  }
+
+  return provider.fullName;
 }
 
 export function getModelInfo(modelID: string, provider: AIProviderID) {
-  const info = MODELS.find((mdl) => mdl.provider === provider).models.find(
-    (mdl) => mdl.id === modelID
-  );
+  const providerModels = MODELS.find(
+    (mdl) => mdl.provider === provider
+  )?.models;
+  const modelInfo =
+    providerModels && providerModels.find((mdl) => mdl.id === modelID);
+
+  if (!modelInfo) {
+    throw new Error(`Model ${modelID} not found`);
+  }
 
   return {
-    promptType: info.promptType,
-    modelType: info.modelType,
-    modelImage: info.imgURL,
+    promptType: modelInfo.promptType,
+    modelType: modelInfo.modelType,
+    modelImage: modelInfo.imgURL,
   };
 }
 
@@ -123,14 +90,15 @@ export function mapMessagesToPrompt(
   messages: Message[],
   promptType?: PromptType
 ): string | ChatCompletionMessage[] | CohereChatCompletionMessage[] {
-  const msgs = (messages || [])
-    .filter((msg) => {
-      return msg.senderID === "ai" || msg.senderID === SELF_ID;
-    })
-    .map((m) => ({
-      role: m.senderID === SELF_ID ? "user" : "assistant",
-      content: m.text,
-    })) as ChatCompletionMessage[];
+  const filteredMessages = (messages || []).filter((msg) => {
+    return msg.senderID === ASSISTANT_ID || msg.senderID === SELF_ID;
+  });
+
+  const msgs = filteredMessages.map((m) => ({
+    role:
+      m.senderID === SELF_ID ? "user" : ("assistant" as "user" | "assistant"),
+    content: m.text ?? "",
+  }));
 
   {
     switch (promptType) {
@@ -162,10 +130,9 @@ export function buildCohereChatPrompt(
 }
 
 export function mapTextToPrompt(userInput: string, modelID: string) {
-  switch (modelID) {
-    case "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5":
-      return `<|prompter|>${userInput}<|endoftext|><|assistant|>`;
-    default:
-      return userInput;
+  if (modelID === "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5") {
+    return `<|prompter|>${userInput}<|endoftext|><|assistant|>`;
+  } else {
+    return userInput;
   }
 }

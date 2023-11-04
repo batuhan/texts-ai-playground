@@ -1,7 +1,7 @@
 import { FetchOptions, texts } from "@textshq/platform-sdk";
 import { CohereChatCompletionMessage } from "./types";
 import { COHERE_BASE_URL } from "./constants";
-import { AIStreamCallbacksAndOptions, CohereStream } from "ai";
+import { AIStreamCallbacksAndOptions } from "ai";
 import EventEmitter from "events";
 import { IncomingMessage } from "http";
 import { tryParseJSON } from "@textshq/platform-sdk/dist/json";
@@ -56,7 +56,7 @@ export default class CohereAPI {
           }),
         };
         const str = await texts.nativeFetchStream(
-          null,
+          "",
           `${COHERE_BASE_URL}/v1/generate`,
           opts
         );
@@ -97,7 +97,7 @@ export default class CohereAPI {
           }),
         };
         const str = await texts.nativeFetchStream(
-          null,
+          "",
           `${COHERE_BASE_URL}/v1/chat`,
           opts
         );
