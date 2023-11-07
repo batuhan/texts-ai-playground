@@ -26,24 +26,24 @@ import {
   AIStreamCallbacksAndOptions,
   HuggingFaceStream,
   OpenAIStream,
-  ReplicateStream,
   StreamingTextResponse,
 } from "ai";
 import {
   ASSISTANT_ID,
   COMMANDS,
   MODELS,
+  MODEL_TYPES,
   PROVIDER_IDS,
   SELF_ID,
   TITLE_MODELS,
 } from "./constants";
-import Replicate from "replicate";
 import { ChatCompletionMessage } from "openai/resources";
 import { HfInference } from "@huggingface/inference";
 import {
   getDefaultMessage,
   getModelInfo,
   getModelOptions,
+  getModelPromptType,
   getProviderName,
   mapMessagesToPrompt,
   mapTextToPrompt,
@@ -55,7 +55,8 @@ import {
   ModelType,
   PromptType,
 } from "./types";
-import CohereAPI, { processReadable } from "./cohere";
+import CohereAPI, { processCohereResponse } from "./cohere";
+import ReplicateAPI, { processReplicateResponse } from "./replicate";
 
 export default class ChatGPT implements PlatformAPI {
   private currentUser: CurrentUser;
@@ -69,7 +70,7 @@ export default class ChatGPT implements PlatformAPI {
   private messages = new Map<Thread["id"], Message[]>();
 
   private openai: OpenAI;
-  private replicate: Replicate;
+  private replicate: ReplicateAPI;
   private huggingface: HfInference;
   private cohere: CohereAPI;
 
@@ -228,8 +229,12 @@ export default class ChatGPT implements PlatformAPI {
         ]);
       },
       onToken: async (token) => {
-        if (aiMessage.text && aiMessage.text[0] === " ") {
-          aiMessage.text = aiMessage.text.substring(1);
+        if (
+          aiMessage.text &&
+          aiMessage.text[0] === " " &&
+          aiMessage.text.trimStart().length > 0
+        ) {
+          aiMessage.text = aiMessage.text.trimStart();
         }
         aiMessage.text += token;
         this.eventHandler([
@@ -379,13 +384,13 @@ export default class ChatGPT implements PlatformAPI {
     delete currentOptions.promptType;
     delete currentOptions.modelType;
 
-    if (modelType === "chat") {
+    if (modelType === MODEL_TYPES.CHAT) {
       this.getAIChatCompletion(
         threadID,
         this.getCallbacks(threadID, modelID, aiMessage),
         currentOptions
       );
-    } else if (modelType === "completion") {
+    } else if (modelType === MODEL_TYPES.COMPLETION) {
       this.getAICompletion(
         text,
         threadID,
@@ -408,11 +413,15 @@ export default class ChatGPT implements PlatformAPI {
     threadID: string,
     callbacks: AIStreamCallbacksAndOptions,
     currentOptions: AIOptions,
-    modelID?: string
+    modelID?: string,
+    customMessages?: Message[]
   ) => {
     try {
       const thread = this.threads.get(threadID);
-      const messages = this.messages.get(threadID);
+      const messages = customMessages
+        ? customMessages
+        : this.messages.get(threadID);
+
       if (!thread || !messages) {
         throw new Error("Thread or messages not found");
       }
@@ -424,7 +433,11 @@ export default class ChatGPT implements PlatformAPI {
         currentOptions
       );
 
-      const promptType: PromptType = extras.promptType;
+      // If the user overrides the model, we need to get its prompt type
+      const promptType: PromptType = modelID
+        ? getModelPromptType(modelID, this.provider)
+        : extras.promptType;
+
       const msgs = mapMessagesToPrompt(messages, promptType);
 
       if (this.provider === PROVIDER_IDS.OPENAI) {
@@ -439,23 +452,16 @@ export default class ChatGPT implements PlatformAPI {
         const openaiResult = new StreamingTextResponse(openaiStream);
         await openaiResult.text();
       } else if (this.provider === PROVIDER_IDS.REPLICATE) {
-        const replicateResponse = await this.replicate.predictions.create({
+        const replicateResponse = await this.replicate.chat.create({
           stream: true,
-          version: selectedModelID,
+          model: selectedModelID,
           // Format the message list into the format expected by Llama 2
           // @see https://github.com/vercel/ai/blob/99cf16edf0a09405d15d3867f997c96a8da869c6/packages/core/prompts/huggingface.ts#L53C1-L78C2
-          input: {
-            prompt: msgs,
-            ...options,
-          },
+          prompt: msgs as string,
+          ...options,
         });
 
-        const replicateStream = await ReplicateStream(
-          replicateResponse,
-          callbacks
-        );
-        const replicateResult = new StreamingTextResponse(replicateStream);
-        await replicateResult.text();
+        await processReplicateResponse(replicateResponse, callbacks);
       } else if (this.provider === PROVIDER_IDS.FIREWORKS) {
         const fireworksResponse = await this.openai.chat.completions.create({
           model: selectedModelID,
@@ -499,7 +505,7 @@ export default class ChatGPT implements PlatformAPI {
           ...options,
         });
 
-        await processReadable(cohereResponse, callbacks);
+        await processCohereResponse(cohereResponse, callbacks);
       }
     } catch (e) {
       this.sendError(threadID, e);
@@ -516,7 +522,7 @@ export default class ChatGPT implements PlatformAPI {
     try {
       const thread = this.threads.get(threadID);
       const extras = thread?.extra;
-      const selectedModelID = modelID ?? extras.aiModelId as string;
+      const selectedModelID = modelID ?? (extras.aiModelId as string);
       const prompt = mapTextToPrompt(userInput, modelID);
       const options = getModelOptions(
         selectedModelID,
@@ -536,20 +542,14 @@ export default class ChatGPT implements PlatformAPI {
         const openaiResult = new StreamingTextResponse(openaiStream);
         await openaiResult.text();
       } else if (this.provider === PROVIDER_IDS.REPLICATE) {
-        const replicateResponse = await this.replicate.predictions.create({
+        const replicateResponse = await this.replicate.completions.create({
           stream: true,
-          version: selectedModelID,
-          input: {
-            prompt,
-          },
+          model: selectedModelID,
+          prompt,
+          ...options,
         });
 
-        const replicateStream = await ReplicateStream(
-          replicateResponse,
-          callbacks
-        );
-        const replicateResult = new StreamingTextResponse(replicateStream);
-        await replicateResult.text();
+        await processReplicateResponse(replicateResponse, callbacks);
       } else if (this.provider === PROVIDER_IDS.FIREWORKS) {
         const fireworksResponse = await this.openai.completions.create({
           model: selectedModelID,
@@ -584,7 +584,7 @@ export default class ChatGPT implements PlatformAPI {
           ...options,
         });
 
-        await processReadable(cohereResponse, callbacks);
+        await processCohereResponse(cohereResponse, callbacks);
       }
     } catch (e) {
       this.sendError(threadID, e);
@@ -699,12 +699,21 @@ export default class ChatGPT implements PlatformAPI {
           TITLE_MODELS.OPENAI
         );
       } else if (this.provider === PROVIDER_IDS.REPLICATE) {
-        this.getAICompletion(
-          prompt,
+        // Because Replicate doesnt have a good model for title generation, we will use the chat model instead
+        const messageArray: Message[] = [
+          {
+            id: uuid(),
+            timestamp: new Date(),
+            text: prompt,
+            senderID: SELF_ID,
+          },
+        ];
+        this.getAIChatCompletion(
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.REPLICATE, this.provider),
-          TITLE_MODELS.REPLICATE
+          TITLE_MODELS.REPLICATE,
+          messageArray
         );
       } else if (this.provider === PROVIDER_IDS.FIREWORKS) {
         this.getAICompletion(
@@ -739,26 +748,24 @@ export default class ChatGPT implements PlatformAPI {
 
   initProvider = (provider: string) => {
     switch (provider) {
-      case "openai":
+      case PROVIDER_IDS.OPENAI:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
         });
         break;
-      case "replicate":
-        this.replicate = new Replicate({
-          auth: this.apiKey,
-        });
+      case PROVIDER_IDS.REPLICATE:
+        this.replicate = new ReplicateAPI(this.apiKey);
         break;
-      case "fireworks":
+      case PROVIDER_IDS.FIREWORKS:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
           baseURL: "https://api.fireworks.ai/inference/v1",
         });
         break;
-      case "huggingface":
+      case PROVIDER_IDS.HUGGINGFACE:
         this.huggingface = new HfInference(this.apiKey);
         break;
-      case "cohere":
+      case PROVIDER_IDS.COHERE:
         this.cohere = new CohereAPI(this.apiKey);
         break;
       default:
