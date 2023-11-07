@@ -108,7 +108,7 @@ export default class CohereAPI {
   }
 }
 
-export async function processReadable(
+export async function processCohereResponse(
   stream: Readable,
   cb: AIStreamCallbacksAndOptions
 ): Promise<{ status: string; message: string }> {

@@ -23,6 +23,12 @@ export type AIOptions =
       presence_penalty: number;
       k: number;
       p: number;
+    }
+  | {
+      temperature: number;
+      max_new_tokens: number;
+      top_p: number;
+      top_k: number;
     };
 
 export type PromptType =
@@ -31,7 +37,7 @@ export type PromptType =
   | "starchat"
   | "cohere"
   | "default";
-  
+
 export type ModelType = "chat" | "completion";
 
 export type AIProviderModel = {

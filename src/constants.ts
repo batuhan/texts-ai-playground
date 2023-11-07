@@ -245,6 +245,63 @@ export const MODELS: AIProviderModel[] = [
       },
     ],
   },
+  {
+    provider: "replicate",
+    models: [
+      {
+        id: "2c1608e18606fad2812020dc541930f2d0495ce32eee50074220b87300bc16e1",
+        fullName: "Llama v2 70B Chat",
+        imgURL: REPLICATE_SVG_DATA_URI,
+        promptType: "llama2",
+        modelType: "chat",
+        options: {
+          temperature: 0.7,
+          max_new_tokens: 128,
+          top_p: 0.9,
+          top_k: 50,
+        },
+      },
+      {
+        id: "83b6a56e7c828e667f21fd596c338fd4f0039b46bcfa18d973e8e70e455fda70",
+        fullName: "Mistral 7B Instruct",
+        imgURL: REPLICATE_SVG_DATA_URI,
+        promptType: "llama2",
+        modelType: "chat",
+        options: {
+          temperature: 0.7,
+          max_new_tokens: 128,
+          top_p: 0.9,
+          top_k: 50,
+        },
+      },
+      {
+        id: "7bf2629623162c0cf22ace9ec7a94b34045c1cfa2ed82586f05f3a60b1ca2da5",
+        fullName: "Codellama 7B Instruct",
+        imgURL: REPLICATE_SVG_DATA_URI,
+        promptType: "default",
+        modelType: "completion",
+        options: {
+          temperature: 0.95,
+          max_tokens: 500,
+          top_p: 0.95,
+          top_k: 10,
+        },
+      },
+      {
+        id: "b17fdb44c843000741367ae3d73e2bb710d7428a662238ddebbf4302db2b5422",
+        fullName: "Codellama 34B Instruct",
+        imgURL: REPLICATE_SVG_DATA_URI,
+        promptType: "default",
+        modelType: "completion",
+        options: {
+          temperature: 0.95,
+          max_tokens: 500,
+          top_p: 0.95,
+          top_k: 10,
+        },
+      },
+    ],
+  },
 ];
 
 export const PROVIDERS: AIProvider[] = [
@@ -268,6 +325,11 @@ export const PROVIDERS: AIProvider[] = [
     fullName: "Cohere",
     imgURL: COHERE_SVG_DATA_URI,
   },
+  {
+    id: "replicate",
+    fullName: "Replicate",
+    imgURL: REPLICATE_SVG_DATA_URI,
+  },
 ];
 
 export const PROVIDER_IDS = {
@@ -280,7 +342,7 @@ export const PROVIDER_IDS = {
 
 export const TITLE_MODELS = {
   OPENAI: "gpt-3.5-turbo-instruct",
-  REPLICATE: "543b4e2b623ad7983a1889c4847fa017ed92276a1d6639d80414a5f1d26587ef",
+  REPLICATE: "83b6a56e7c828e667f21fd596c338fd4f0039b46bcfa18d973e8e70e455fda70",
   FIREWORKS: "accounts/fireworks/models/llama-v2-13b",
   HUGGINGFACE: "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
   COHERE: "command",
@@ -295,4 +357,10 @@ export const COMMANDS = {
   PARAM: "/param",
 };
 
+export const MODEL_TYPES = {
+  CHAT: "chat",
+  COMPLETION: "completion",
+};
+
 export const COHERE_BASE_URL = "https://api.cohere.ai";
+export const REPLICATE_BASE_URL = "https://api.replicate.com";

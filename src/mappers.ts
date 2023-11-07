@@ -45,6 +45,7 @@ export function getModelOptions(
   const providerModels = MODELS.find(
     (mdl) => mdl.provider === provider
   )?.models;
+  
   const model =
     providerModels && providerModels.find((mdl) => mdl.id === modelID);
 
@@ -54,6 +55,19 @@ export function getModelOptions(
   const options = { ...defaultOptions, ...(currentOptions || {}) };
 
   return options;
+}
+
+export function getModelPromptType(modelID: string, provider: AIProviderID) {
+  const providerModels = MODELS.find(
+    (mdl) => mdl.provider === provider
+  )?.models;
+
+  const model =
+    providerModels && providerModels.find((mdl) => mdl.id === modelID);
+
+  if (!model) throw new Error(`Model ${modelID} not found`);
+
+  return model.promptType;
 }
 
 export function getProviderName(providerID: AIProviderID) {
