@@ -113,7 +113,7 @@ export async function processCohereResponse(
   cb: AIStreamCallbacksAndOptions
 ): Promise<{ status: string; message: string }> {
   let response: IncomingMessage;
-  const completionArray = [];
+  const completionArray: string[] = [];
   let isError = false;
   let isStarted = false;
 

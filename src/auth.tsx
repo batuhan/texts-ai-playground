@@ -9,13 +9,14 @@ const auth: React.FC<AuthProps> = ({ login }) => {
 
   const handleLogin = () => {
     if (apiKey && selectedProvider !== "default") {
-      login({
-        custom: {
-          apiKey,
-          provider: selectedProvider,
-          label,
-        },
-      });
+      login &&
+        login({
+          custom: {
+            apiKey,
+            provider: selectedProvider,
+            label,
+          },
+        });
     }
   };
 

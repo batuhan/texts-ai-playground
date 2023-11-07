@@ -122,7 +122,7 @@ export async function processReplicateResponse(
   url: string,
   cb: AIStreamCallbacksAndOptions
 ): Promise<{ status: string; message: string }> {
-  const completionArray = [];
+  const completionArray: string[] = [];
   let isStarted = false;
   const source = new EventSource(url);
 
