@@ -1785,6 +1785,7 @@ __metadata:
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/"
     "@types/chance": ^1.1.3
     "@types/eslint": ^8.4.10
+    "@types/eventsource": ^1.1.15
     "@types/lodash": ^4.14.184
     "@types/node": ^18.7.13
     "@types/react": ^17.0.43
@@ -1792,6 +1793,7 @@ __metadata:
     chance: ^1.1.8
     date-fns: ^2.29.2
     eslint: ^8.30.0
+    eventsource: ^2.0.2
     got: ^11.0.0
     lodash: ^4.17.21
     openai: ^4.12.3
@@ -1844,6 +1846,13 @@ __metadata:
   version: 1.0.2
   resolution: "@types/estree@npm:1.0.2"
   checksum: aeedb1b2fe20cbe06f44b99b562bf9703e360bfcdf5bb3d61d248182ee1dd63500f2474e12f098ffe1f5ac3202b43b3e18ec99902d9328d5374f5512fa077e45
+  languageName: node
+  linkType: hard
+
+"@types/eventsource@npm:^1.1.15":
+  version: 1.1.15
+  resolution: "@types/eventsource@npm:1.1.15"
+  checksum: 52e024f5aebfd6bc166f2162d6e408cf788886007e571519c75f8c3623feaa3c5a74681fd3a128de6d21b28ef88dd683421264f10d5c98728959b99b1229b85e
   languageName: node
   linkType: hard
 
@@ -3331,6 +3340,13 @@ __metadata:
   version: 1.0.0
   resolution: "eventsource-parser@npm:1.0.0"
   checksum: 1bcef98c6e35e5afe6bdbcd6985187d26f3e706f7283a9a8e114491322a2a3be6fb75298ad8426bd5f7ca3de99a632417e8b60d14cc9bc3f4b6aebc03a81c00d
+  languageName: node
+  linkType: hard
+
+"eventsource@npm:^2.0.2":
+  version: 2.0.2
+  resolution: "eventsource@npm:2.0.2"
+  checksum: c0072d972753e10c705d9b2285b559184bf29d011bc208973dde9c8b6b8b7b6fdad4ef0846cecb249f7b1585e860fdf324cbd2ac854a76bc53649e797496e99a
   languageName: node
   linkType: hard
 
