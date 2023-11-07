@@ -113,7 +113,7 @@ export async function processCohereResponse(
   cb: AIStreamCallbacksAndOptions
 ): Promise<{ status: string; message: string }> {
   let response: IncomingMessage;
-  let completion = "";
+  const completionArray = [];
   let isError = false;
   let isStarted = false;
 
@@ -128,16 +128,17 @@ export async function processCohereResponse(
       // If the content-type is application/json, then the response is an error
       if (ct && ct.includes("application/json")) {
         isError = true;
-        completion = parsed.message;
+        completionArray.push(parsed.message);
       }
       // Has event type if request is sent to /chat
       if (parsed.event_type) {
         if (parsed.event_type === "stream-start") {
           cb.onStart && cb.onStart();
         } else if (parsed.event_type === "text-generation") {
+          completionArray.push(parsed.text);
           cb.onToken && cb.onToken(parsed.text);
-          completion += parsed.text;
         } else if (parsed.event_type === "stream-end") {
+          const completion = completionArray.join("");
           cb.onCompletion && cb.onCompletion(completion);
           cb.onFinal && cb.onFinal(parsed.text);
         }
@@ -148,15 +149,17 @@ export async function processCohereResponse(
           isStarted = true;
         }
         if (parsed.is_finished) {
+          const completion = completionArray.join("");
           cb.onCompletion && cb.onCompletion(completion);
           cb.onFinal && cb.onFinal(completion);
         } else {
-          completion += parsed.text;
+          completionArray.push(parsed.text);
           cb.onToken && cb.onToken(parsed.text);
         }
       }
     });
     stream.on("end", () => {
+      const completion = completionArray.join("");
       isError
         ? reject({
             status: "error",
