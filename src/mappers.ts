@@ -1,5 +1,10 @@
-import { Message, texts } from "@textshq/platform-sdk";
-import { MODELS, SELF_ID, PROVIDERS, ASSISTANT_ID } from "./constants";
+import { Message } from "@textshq/platform-sdk";
+import {
+  MODELS,
+  SELF_ID,
+  PROVIDERS,
+  ASSISTANT_ID,
+} from "./constants";
 import { randomUUID as uuid } from "crypto";
 import {
   AIOptions,
@@ -8,7 +13,7 @@ import {
   CohereChatCompletionMessage,
   PromptType,
 } from "./types";
-import { ChatCompletionMessage } from "openai/resources";
+import { ChatCompletionMessageParam } from "openai/resources";
 import {
   experimental_buildLlama2Prompt,
   experimental_buildOpenAssistantPrompt,
@@ -17,7 +22,8 @@ import {
 
 export function getDefaultMessage(
   modelID: string,
-  provider: AIProviderID
+  provider: AIProviderID,
+  threadID?: string
 ): Message {
   const providerModels = MODELS.find(
     (mdl) => mdl.provider === provider
@@ -25,6 +31,7 @@ export function getDefaultMessage(
   const fullName =
     providerModels &&
     providerModels.find((mdl) => mdl.id === modelID)?.fullName;
+  const thread = threadID ? threadID : modelID;
 
   return {
     id: uuid(),
@@ -33,7 +40,7 @@ export function getDefaultMessage(
     senderID: "action",
     isSender: false,
     isAction: true,
-    threadID: modelID,
+    threadID: thread,
   };
 }
 
@@ -45,7 +52,7 @@ export function getModelOptions(
   const providerModels = MODELS.find(
     (mdl) => mdl.provider === provider
   )?.models;
-  
+
   const model =
     providerModels && providerModels.find((mdl) => mdl.id === modelID);
 
@@ -103,7 +110,7 @@ export function getModelInfo(modelID: string, provider: AIProviderID) {
 export function mapMessagesToPrompt(
   messages: Message[],
   promptType?: PromptType
-): string | ChatCompletionMessage[] | CohereChatCompletionMessage[] {
+): string | CohereChatCompletionMessage[] | ChatCompletionMessageParam[] {
   const filteredMessages = (messages || []).filter((msg) => {
     return msg.senderID === ASSISTANT_ID || msg.senderID === SELF_ID;
   });
@@ -133,7 +140,7 @@ export function mapMessagesToPrompt(
 }
 
 export function buildCohereChatPrompt(
-  messages: ChatCompletionMessage[]
+  messages: ChatCompletionMessageParam[]
 ): CohereChatCompletionMessage[] {
   return messages.map((msg) => {
     return {

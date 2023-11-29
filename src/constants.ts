@@ -7,7 +7,7 @@ import {
   COHERE_SVG_DATA_URI,
   REPLICATE_SVG_DATA_URI,
 } from "./icons";
-import { AIProvider, AIProviderModel } from "./types";
+import { AIProvider, AIProviderID, AIProviderModel } from "./types";
 
 export const SELF_ID = "human";
 export const ASSISTANT_ID = "ai";
@@ -302,6 +302,23 @@ export const MODELS: AIProviderModel[] = [
       },
     ],
   },
+  {
+    provider: "openai-assistant",
+    models: [
+      {
+        id: "gpt-4-1106-preview",
+        fullName: "OpenAI Assistant",
+        imgURL: OPENAI_SVG_DATA_URI,
+        promptType: "default",
+        modelType: "assistant",
+        options: {
+          temperature: 0.9,
+          top_p: 1,
+          max_tokens: 250,
+        }
+      },
+    ],
+  },
 ];
 
 export const PROVIDERS: AIProvider[] = [
@@ -330,14 +347,20 @@ export const PROVIDERS: AIProvider[] = [
     fullName: "Replicate",
     imgURL: REPLICATE_SVG_DATA_URI,
   },
+  {
+    id: "openai-assistant",
+    fullName: "OpenAI Assistant",
+    imgURL: OPENAI_SVG_DATA_URI,
+  },
 ];
 
-export const PROVIDER_IDS = {
+export const PROVIDER_IDS: Record<string, AIProviderID> = {
   OPENAI: "openai",
   FIREWORKS: "fireworks",
   HUGGINGFACE: "huggingface",
   COHERE: "cohere",
   REPLICATE: "replicate",
+  OPENAI_ASSISTANT: "openai-assistant",
 };
 
 export const TITLE_MODELS = {
@@ -346,6 +369,10 @@ export const TITLE_MODELS = {
   FIREWORKS: "accounts/fireworks/models/llama-v2-13b",
   HUGGINGFACE: "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
   COHERE: "command",
+};
+
+export const ASSISTANT_MODELS = {
+  OPENAI_ASSISTANT: "gpt-4-1106-preview",
 };
 
 export const COMMANDS = {
@@ -360,6 +387,7 @@ export const COMMANDS = {
 export const MODEL_TYPES = {
   CHAT: "chat",
   COMPLETION: "completion",
+  ASSISTANT: "assistant",
 };
 
 export const COHERE_BASE_URL = "https://api.cohere.ai";

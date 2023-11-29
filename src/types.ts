@@ -1,3 +1,5 @@
+import { ChatCompletionContentPart } from "openai/resources";
+
 export type AIOptions =
   | {
       temperature: number;
@@ -38,7 +40,7 @@ export type PromptType =
   | "cohere"
   | "default";
 
-export type ModelType = "chat" | "completion";
+export type ModelType = "chat" | "completion" | "assistant";
 
 export type AIProviderModel = {
   provider: AIProviderID;
@@ -59,7 +61,8 @@ export type AIProviderID =
   | "fireworks"
   | "huggingface"
   | "cohere"
-  | "replicate";
+  | "replicate"
+  | "openai-assistant";
 
 export type AIProvider = {
   id: AIProviderID;
@@ -68,6 +71,6 @@ export type AIProvider = {
 };
 
 export type CohereChatCompletionMessage = {
-  message: string | null;
+  message: string | null | ChatCompletionContentPart[];
   role: "USER" | "CHATBOT";
 };

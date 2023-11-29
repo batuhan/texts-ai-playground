@@ -30,6 +30,7 @@ import {
 } from "ai";
 import {
   ASSISTANT_ID,
+  ASSISTANT_MODELS,
   COMMANDS,
   MODELS,
   MODEL_TYPES,
@@ -37,7 +38,7 @@ import {
   SELF_ID,
   TITLE_MODELS,
 } from "./constants";
-import { ChatCompletionMessage } from "openai/resources";
+import { ChatCompletionMessageParam } from "openai/resources";
 import { HfInference } from "@huggingface/inference";
 import {
   getDefaultMessage,
@@ -57,6 +58,7 @@ import {
 } from "./types";
 import CohereAPI, { processCohereResponse } from "./cohere";
 import ReplicateAPI, { processReplicateResponse } from "./replicate";
+import { createReadStream, readFileSync } from "fs";
 
 export default class ChatGPT implements PlatformAPI {
   private currentUser: CurrentUser;
@@ -64,6 +66,7 @@ export default class ChatGPT implements PlatformAPI {
   private provider: AIProviderID = "openai";
 
   private apiKey: string = "";
+  private assistantID: string = "";
 
   private threads = new Map<Thread["id"], Thread>();
 
@@ -82,10 +85,13 @@ export default class ChatGPT implements PlatformAPI {
       this.provider = session.provider;
       this.apiKey = session.apiKey;
       this.initProvider(session.provider);
+      if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
+        this.assistantID = session.assistantID;
+      }
     }
   };
 
-  login = (creds?: LoginCreds): LoginResult => {
+  login = async (creds?: LoginCreds): Promise<LoginResult> => {
     const loginCreds =
       creds &&
       "custom" in creds &&
@@ -105,7 +111,20 @@ export default class ChatGPT implements PlatformAPI {
       displayText,
       username: "User",
     };
+
+    texts.log("Logging in with creds");
     this.initProvider(creds.custom.provider);
+
+    // Handle OpenAI Assistant Creation
+    if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
+      texts.log("Creating assistant");
+      texts.log(creds.custom.files);
+      const filePaths = creds.custom.files;
+      const fileIds = await this.createFiles(creds.custom.files);
+      texts.log(fileIds);
+      const assistantId = await this.createAssistant(fileIds);
+      this.assistantID = assistantId;
+    }
 
     return { type: "success" };
   };
@@ -114,11 +133,20 @@ export default class ChatGPT implements PlatformAPI {
 
   getCurrentUser = () => this.currentUser;
 
-  serializeSession = () => ({
-    user: this.currentUser,
-    provider: this.provider,
-    apiKey: this.apiKey,
-  });
+  serializeSession = () => {
+    return this.provider === PROVIDER_IDS.OPENAI_ASSISTANT
+      ? {
+          user: this.currentUser,
+          provider: this.provider,
+          apiKey: this.apiKey,
+          assistantID: this.assistantID,
+        }
+      : {
+          user: this.currentUser,
+          provider: this.provider,
+          apiKey: this.apiKey,
+        };
+  };
 
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
     this.eventHandler = onEvent;
@@ -172,9 +200,17 @@ export default class ChatGPT implements PlatformAPI {
 
     const model = providerModels.find((mdl) => mdl.id === modelID);
     const fullName = model ? model.fullName : "Unknown";
+    let threadID = "";
+
+    if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
+      const openAIThreadID = await this.createAssistantThread();
+      threadID = openAIThreadID;
+    } else {
+      threadID = uuid();
+    }
 
     const thread: Thread = {
-      id: uuid(),
+      id: threadID,
       type: "single",
       timestamp: new Date(),
       description: `Chat with ${modelID}`,
@@ -269,63 +305,70 @@ export default class ChatGPT implements PlatformAPI {
     const thread = this.threads.get(threadID);
     if (!thread) return false;
     const modelID = thread.extra?.aiModelId;
+    const extras = thread.extra;
+    const modelType = extras.modelType as ModelType;
 
     // If the user sends and empty message, return an error
     if (!text) return false;
-    // Clears the conversation if the user sends /clear or /reset
-    if (text.startsWith(COMMANDS.CLEAR) || text.startsWith(COMMANDS.RESET)) {
-      this.messages.set(threadID, [getDefaultMessage(modelID, this.provider)]);
-      thread.extra.titleGenerated = false;
-      return true;
-    }
 
-    // Extract the valid options for the current model from extras
-    const extrasKeysArray = Array.from(Object.keys(thread.extra));
-    const validOptions = extrasKeysArray.filter(
-      (key) =>
-        !["aiModelId", "titleGenerated", "promptType", "modelType"].includes(
-          key
-        )
-    );
-    const extras = thread.extra;
-
-    // If the user sends /set, set the value as the new option value
-    if (text.startsWith(COMMANDS.SET)) {
-      const [_, key, value] = text.split(" ");
-
-      // If the key is not valid, return an error
-      if (!validOptions.includes(key) || !value || isNaN(+value)) {
-        this.sendCommandMessage(
-          threadID,
-          `Key ${key} not assignable for this model`
-        );
-        texts.log(`invalid key : ${key}`);
+    // Only handle commands if the provider is not OpenAI Assistant
+    if (modelType !== MODEL_TYPES.ASSISTANT) {
+      // Clears the conversation if the user sends /clear or /reset
+      if (text.startsWith(COMMANDS.CLEAR) || text.startsWith(COMMANDS.RESET)) {
+        this.messages.set(threadID, [
+          getDefaultMessage(modelID, this.provider),
+        ]);
+        thread.extra.titleGenerated = false;
         return true;
       }
 
-      this.sendCommandMessage(threadID, `Set ${key} to ${value}`);
-      thread.extra[key] = +value;
-      return true;
-    }
+      // Extract the valid options for the current model from extras
+      const extrasKeysArray = Array.from(Object.keys(thread.extra));
+      const validOptions = extrasKeysArray.filter(
+        (key) =>
+          !["aiModelId", "titleGenerated", "promptType", "modelType"].includes(
+            key
+          )
+      );
 
-    // If the user sends /help, return the list of available commands
-    if (text.startsWith(COMMANDS.HELP)) {
-      const message = `/clear reset the conversation\n/params shows the current parameters${validOptions
-        .map((option) => `\n/set ${option} ${extras[option]}`)
-        .join("")}`;
+      // If the user sends /set, set the value as the new option value
+      if (text.startsWith(COMMANDS.SET)) {
+        const [_, key, value] = text.split(" ");
 
-      this.sendCommandMessage(threadID, message);
-      return true;
-    }
+        // If the key is not valid, return an error
+        if (!validOptions.includes(key) || !value || isNaN(+value)) {
+          this.sendCommandMessage(
+            threadID,
+            `Key ${key} not assignable for this model`
+          );
+          texts.log(`invalid key : ${key}`);
+          return true;
+        }
 
-    // If the user sends /params, return the list of available parameters
-    if (text.startsWith(COMMANDS.PARAMS) || text.startsWith(COMMANDS.PARAM)) {
-      const message = `${validOptions
-        .map((option) => `${option} : ${extras[option]}`)
-        .join(`\n`)}`;
+        this.sendCommandMessage(threadID, `Set ${key} to ${value}`);
+        thread.extra[key] = +value;
+        return true;
+      }
 
-      this.sendCommandMessage(threadID, message);
-      return true;
+      // If the user sends /help, return the list of available commands
+      if (text.startsWith(COMMANDS.HELP)) {
+        const message = `/clear reset the conversation\n/params shows the current parameters${validOptions
+          .map((option) => `\n/set ${option} ${extras[option]}`)
+          .join("")}`;
+
+        this.sendCommandMessage(threadID, message);
+        return true;
+      }
+
+      // If the user sends /params, return the list of available parameters
+      if (text.startsWith(COMMANDS.PARAMS) || text.startsWith(COMMANDS.PARAM)) {
+        const message = `${validOptions
+          .map((option) => `${option} : ${extras[option]}`)
+          .join(`\n`)}`;
+
+        this.sendCommandMessage(threadID, message);
+        return true;
+      }
     }
 
     const messageID = options?.pendingMessageID;
@@ -375,8 +418,6 @@ export default class ChatGPT implements PlatformAPI {
       isSender: false,
     };
 
-    const modelType = extras.modelType as ModelType;
-
     // Extract the current options for the current model from extras
     const currentOptions = { ...extras };
     delete currentOptions.aiModelId;
@@ -388,7 +429,8 @@ export default class ChatGPT implements PlatformAPI {
       this.getAIChatCompletion(
         threadID,
         this.getCallbacks(threadID, modelID, aiMessage),
-        currentOptions
+        currentOptions,
+        this.provider
       );
     } else if (modelType === MODEL_TYPES.COMPLETION) {
       this.getAICompletion(
@@ -396,8 +438,11 @@ export default class ChatGPT implements PlatformAPI {
         threadID,
         this.getCallbacks(threadID, modelID, aiMessage),
         currentOptions,
-        extras.aiModelId
+        extras.aiModelId,
+        this.provider
       );
+    } else if (modelType === MODEL_TYPES.ASSISTANT) {
+      this.getAssistantResponse(text, threadID, aiMessage, modelID);
     }
 
     // Generate a title for the conversation if it hasn't been done yet
@@ -413,6 +458,7 @@ export default class ChatGPT implements PlatformAPI {
     threadID: string,
     callbacks: AIStreamCallbacksAndOptions,
     currentOptions: AIOptions,
+    providerID: AIProviderID,
     modelID?: string,
     customMessages?: Message[]
   ) => {
@@ -429,29 +475,29 @@ export default class ChatGPT implements PlatformAPI {
       const selectedModelID = modelID ? modelID : extras.aiModelId;
       const options = getModelOptions(
         selectedModelID,
-        this.provider,
+        providerID,
         currentOptions
       );
 
       // If the user overrides the model, we need to get its prompt type
       const promptType: PromptType = modelID
-        ? getModelPromptType(modelID, this.provider)
+        ? getModelPromptType(modelID, providerID)
         : extras.promptType;
 
       const msgs = mapMessagesToPrompt(messages, promptType);
 
-      if (this.provider === PROVIDER_IDS.OPENAI) {
+      if (providerID === PROVIDER_IDS.OPENAI) {
         const openaiResponse = await this.openai.chat.completions.create({
           model: selectedModelID,
           stream: true,
-          messages: msgs as ChatCompletionMessage[],
+          messages: msgs as ChatCompletionMessageParam[],
           ...options,
         });
 
         const openaiStream = OpenAIStream(openaiResponse, callbacks);
         const openaiResult = new StreamingTextResponse(openaiStream);
         await openaiResult.text();
-      } else if (this.provider === PROVIDER_IDS.REPLICATE) {
+      } else if (providerID === PROVIDER_IDS.REPLICATE) {
         const replicateResponse = await this.replicate.chat.create({
           stream: true,
           model: selectedModelID,
@@ -462,18 +508,18 @@ export default class ChatGPT implements PlatformAPI {
         });
 
         await processReplicateResponse(replicateResponse, callbacks);
-      } else if (this.provider === PROVIDER_IDS.FIREWORKS) {
+      } else if (providerID === PROVIDER_IDS.FIREWORKS) {
         const fireworksResponse = await this.openai.chat.completions.create({
           model: selectedModelID,
           stream: true,
-          messages: msgs as ChatCompletionMessage[],
+          messages: msgs as ChatCompletionMessageParam[],
           ...options,
         });
 
         const fireworksStream = OpenAIStream(fireworksResponse, callbacks);
         const fireworksResult = new StreamingTextResponse(fireworksStream);
         await fireworksResult.text();
-      } else if (this.provider === PROVIDER_IDS.HUGGINGFACE) {
+      } else if (providerID === PROVIDER_IDS.HUGGINGFACE) {
         const huggingfaceResponse = this.huggingface.textGenerationStream({
           model: selectedModelID,
           inputs: msgs as string,
@@ -488,7 +534,7 @@ export default class ChatGPT implements PlatformAPI {
         );
         const huggingfaceResult = new StreamingTextResponse(huggingfaceStream);
         await huggingfaceResult.text();
-      } else if (this.provider === PROVIDER_IDS.COHERE) {
+      } else if (providerID === PROVIDER_IDS.COHERE) {
         const lastUserMessage = msgs[
           msgs.length - 1
         ] as CohereChatCompletionMessage;
@@ -500,7 +546,7 @@ export default class ChatGPT implements PlatformAPI {
         const cohereResponse = await this.cohere.chat.create({
           model: selectedModelID,
           stream: true,
-          prompt: lastUserMessage.message,
+          prompt: lastUserMessage.message as string,
           messages: msgs as CohereChatCompletionMessage[],
           ...options,
         });
@@ -517,7 +563,8 @@ export default class ChatGPT implements PlatformAPI {
     threadID: string,
     callbacks: AIStreamCallbacksAndOptions,
     currentOptions: AIOptions,
-    modelID: string
+    modelID: string,
+    providerID: AIProviderID
   ) => {
     try {
       const thread = this.threads.get(threadID);
@@ -526,11 +573,14 @@ export default class ChatGPT implements PlatformAPI {
       const prompt = mapTextToPrompt(userInput, modelID);
       const options = getModelOptions(
         selectedModelID,
-        this.provider,
+        providerID,
         currentOptions
       );
 
-      if (this.provider === PROVIDER_IDS.OPENAI) {
+      if (
+        providerID === PROVIDER_IDS.OPENAI ||
+        providerID === PROVIDER_IDS.OPENAI_ASSISTANT
+      ) {
         const openaiResponse = await this.openai.completions.create({
           model: selectedModelID,
           stream: true,
@@ -541,7 +591,7 @@ export default class ChatGPT implements PlatformAPI {
         const openaiStream = OpenAIStream(openaiResponse, callbacks);
         const openaiResult = new StreamingTextResponse(openaiStream);
         await openaiResult.text();
-      } else if (this.provider === PROVIDER_IDS.REPLICATE) {
+      } else if (providerID === PROVIDER_IDS.REPLICATE) {
         const replicateResponse = await this.replicate.completions.create({
           stream: true,
           model: selectedModelID,
@@ -550,7 +600,7 @@ export default class ChatGPT implements PlatformAPI {
         });
 
         await processReplicateResponse(replicateResponse, callbacks);
-      } else if (this.provider === PROVIDER_IDS.FIREWORKS) {
+      } else if (providerID === PROVIDER_IDS.FIREWORKS) {
         const fireworksResponse = await this.openai.completions.create({
           model: selectedModelID,
           stream: true,
@@ -561,7 +611,7 @@ export default class ChatGPT implements PlatformAPI {
         const fireworksStream = OpenAIStream(fireworksResponse, callbacks);
         const fireworksResult = new StreamingTextResponse(fireworksStream);
         await fireworksResult.text();
-      } else if (this.provider === PROVIDER_IDS.HUGGINGFACE) {
+      } else if (providerID === PROVIDER_IDS.HUGGINGFACE) {
         const huggingfaceResponse = this.huggingface.textGenerationStream({
           model: selectedModelID,
           inputs: prompt,
@@ -576,7 +626,7 @@ export default class ChatGPT implements PlatformAPI {
         );
         const huggingfaceResult = new StreamingTextResponse(huggingfaceStream);
         await huggingfaceResult.text();
-      } else if (this.provider === PROVIDER_IDS.COHERE) {
+      } else if (providerID === PROVIDER_IDS.COHERE) {
         const cohereResponse = await this.cohere.completions.create({
           model: selectedModelID,
           stream: true,
@@ -696,7 +746,8 @@ export default class ChatGPT implements PlatformAPI {
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.OPENAI, this.provider),
-          TITLE_MODELS.OPENAI
+          TITLE_MODELS.OPENAI,
+          this.provider
         );
       } else if (this.provider === PROVIDER_IDS.REPLICATE) {
         // Because Replicate doesnt have a good model for title generation, we will use the chat model instead
@@ -712,6 +763,7 @@ export default class ChatGPT implements PlatformAPI {
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.REPLICATE, this.provider),
+          this.provider,
           TITLE_MODELS.REPLICATE,
           messageArray
         );
@@ -721,7 +773,8 @@ export default class ChatGPT implements PlatformAPI {
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.FIREWORKS, this.provider),
-          TITLE_MODELS.FIREWORKS
+          TITLE_MODELS.FIREWORKS,
+          this.provider
         );
       } else if (this.provider === PROVIDER_IDS.HUGGINGFACE) {
         this.getAICompletion(
@@ -729,7 +782,8 @@ export default class ChatGPT implements PlatformAPI {
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.HUGGINGFACE, this.provider),
-          TITLE_MODELS.HUGGINGFACE
+          TITLE_MODELS.HUGGINGFACE,
+          this.provider
         );
       } else if (this.provider === PROVIDER_IDS.COHERE) {
         this.getAICompletion(
@@ -737,7 +791,17 @@ export default class ChatGPT implements PlatformAPI {
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.COHERE, this.provider),
-          TITLE_MODELS.COHERE
+          TITLE_MODELS.COHERE,
+          this.provider
+        );
+      } else if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
+        this.getAICompletion(
+          prompt,
+          threadID,
+          this.getTitleCallbacks(threadID, generatedTitle),
+          getModelOptions(TITLE_MODELS.OPENAI, PROVIDER_IDS.OPENAI),
+          TITLE_MODELS.OPENAI,
+          PROVIDER_IDS.OPENAI
         );
       }
     } catch (e) {
@@ -749,6 +813,7 @@ export default class ChatGPT implements PlatformAPI {
   initProvider = (provider: string) => {
     switch (provider) {
       case PROVIDER_IDS.OPENAI:
+      case PROVIDER_IDS.OPENAI_ASSISTANT:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
         });
@@ -768,12 +833,133 @@ export default class ChatGPT implements PlatformAPI {
       case PROVIDER_IDS.COHERE:
         this.cohere = new CohereAPI(this.apiKey);
         break;
+
       default:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
         });
         break;
     }
+  };
+
+  createFiles = async (filePaths: string[]) => {
+    const fileIds: string[] = [];
+    for (const filePath of filePaths) {
+      texts.log(filePath);
+      const fileResponse = await this.openai.files.create({
+        file: createReadStream(filePath),
+        purpose: "assistants",
+      });
+      fileIds.push(fileResponse.id);
+    }
+    return fileIds;
+  };
+
+  createAssistant = async (files: string[]) => {
+    if (files.length === 0) {
+      const assistantResponse = await this.openai.beta.assistants.create({
+        name: "AI Playground Assistant",
+        description: "Assistant for AI Playground",
+        model: ASSISTANT_MODELS.OPENAI_ASSISTANT,
+        file_ids: files,
+      });
+      return assistantResponse.id;
+    } else {
+      const assistantResponse = await this.openai.beta.assistants.create({
+        name: "AI Playground Assistant",
+        description: "Assistant for AI Playground",
+        model: ASSISTANT_MODELS.OPENAI_ASSISTANT,
+        tools: [{ type: "retrieval" }],
+        file_ids: files,
+      });
+      return assistantResponse.id;
+    }
+  };
+
+  createAssistantThread = async () => {
+    const thread = await this.openai.beta.threads.create({});
+    return thread.id;
+  };
+
+  getAssistantResponse = async (
+    text: string,
+    threadID: string,
+    aiMessage: Message,
+    modelID: string
+  ) => {
+    const createdMessage = await this.openai.beta.threads.messages.create(
+      threadID,
+      {
+        role: "user",
+        content: text,
+      }
+    );
+
+    const run = await this.openai.beta.threads.runs.create(threadID, {
+      assistant_id: this.assistantID,
+    });
+
+    const waitForRun = async (run: OpenAI.Beta.Threads.Runs.Run) => {
+      // Poll for status change
+      while (run.status === "queued" || run.status === "in_progress") {
+        // delay for 500ms:
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        run = await this.openai.beta.threads.runs.retrieve(threadID, run.id);
+      }
+
+      // Check the run status
+      if (
+        run.status === "cancelled" ||
+        run.status === "cancelling" ||
+        run.status === "failed" ||
+        run.status === "expired"
+      ) {
+        texts.error(run.status);
+        throw new Error(run.status);
+      }
+    };
+
+    await waitForRun(run);
+
+    // Get the response messages
+    const responseMessages = (
+      await this.openai.beta.threads.messages.list(threadID, {
+        after: createdMessage.id,
+        order: "asc",
+      })
+    ).data;
+
+    // Loop through the response messages and add them to the thread
+    responseMessages.forEach((message) => {
+      message.content.forEach((content) => {
+        if (content.type === "text") {
+          if (aiMessage.text && aiMessage.text[0] === " ") {
+            aiMessage.text = aiMessage.text.trimStart();
+          }
+          aiMessage.text += content.text.value;
+          this.eventHandler([
+            {
+              type: ServerEventType.STATE_SYNC,
+              objectName: "message",
+              mutationType: "upsert",
+              objectIDs: { threadID },
+              entries: [aiMessage],
+            },
+          ]);
+        }
+      });
+    });
+
+    // Set AI Activity to none
+    this.eventHandler([
+      {
+        type: ServerEventType.USER_ACTIVITY,
+        activityType: ActivityType.NONE,
+        threadID,
+        participantID: modelID,
+      },
+    ]);
   };
 
   sendActivityIndicator = (threadId: string) => {};
