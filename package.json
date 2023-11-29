@@ -13,13 +13,13 @@
   "dependencies": {
     "@huggingface/inference": "^2.6.4",
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/",
-    "ai": "2.2.16",
+    "ai": "^2.2.26",
     "chance": "^1.1.8",
     "date-fns": "^2.29.2",
     "eventsource": "^2.0.2",
     "got": "^11.0.0",
     "lodash": "^4.17.21",
-    "openai": "^4.12.3",
+    "openai": "^4.20.0",
     "react": "file: ~/../../react-global-shim-main/",
     "replicate": "^0.20.1"
   },

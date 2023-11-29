@@ -1789,14 +1789,14 @@ __metadata:
     "@types/lodash": ^4.14.184
     "@types/node": ^18.7.13
     "@types/react": ^17.0.43
-    ai: 2.2.16
+    ai: ^2.2.26
     chance: ^1.1.8
     date-fns: ^2.29.2
     eslint: ^8.30.0
     eventsource: ^2.0.2
     got: ^11.0.0
     lodash: ^4.17.21
-    openai: ^4.12.3
+    openai: ^4.20.0
     react: "file: ~/../../react-global-shim-main/"
     replicate: ^0.20.1
     typescript: ^5.0.2
@@ -2135,9 +2135,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ai@npm:2.2.16":
-  version: 2.2.16
-  resolution: "ai@npm:2.2.16"
+"ai@npm:^2.2.26":
+  version: 2.2.26
+  resolution: "ai@npm:2.2.26"
   dependencies:
     eventsource-parser: 1.0.0
     nanoid: 3.3.6
@@ -2160,7 +2160,7 @@ __metadata:
       optional: true
     vue:
       optional: true
-  checksum: ced8bebb5ce3fd1e03e539420d1d0e31ed5cad184ee4f5470ffd215a6edfec5be179abba2491c5580cdb53ca8e9a7df323e29dc392457ce334666b5c21340962
+  checksum: f83a2cf2c421db69f0adda59242c81bd3934349d6767492f16b4b0150b6544d3643bfb2d7f198102f8535b31ca1e34cebcf13724be0b58fa116feca7b338ab08
   languageName: node
   linkType: hard
 
@@ -4493,9 +4493,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openai@npm:^4.12.3":
-  version: 4.12.3
-  resolution: "openai@npm:4.12.3"
+"openai@npm:^4.20.0":
+  version: 4.20.0
+  resolution: "openai@npm:4.20.0"
   dependencies:
     "@types/node": ^18.11.18
     "@types/node-fetch": ^2.6.4
@@ -4508,7 +4508,7 @@ __metadata:
     web-streams-polyfill: ^3.2.1
   bin:
     openai: bin/cli
-  checksum: 70fff518f8dc21996bd128e88a324dd8c874765edd947830d3f43066e69bd0b7d166f048c327ebbbfa31e2c9e90435673dde4c6730421a545b330766dd53cf35
+  checksum: 4ef466562ed6f65ea841ec81549d06fa10877628582ed201fe1d0259bb1d86432b6a81d9ff02c49d1f328ec96ef0131d54add3826277b64098ba55ea1028b2f0
   languageName: node
   linkType: hard
 
