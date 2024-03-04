@@ -1,0 +1,73 @@
+import { db } from ".";
+import { and, eq } from "drizzle-orm";
+import { messages, threads, users } from "./schema";
+import { AIProviderID, ThreadWithMessagesAndParticipants } from "../types";
+import { UserID } from "@textshq/platform-sdk";
+
+export async function selectThread(threadID: string, currentUserID: UserID) {
+  const thread = await db.query.threads.findFirst({
+    where: and(eq(threads.id, threadID), eq(threads.userID, currentUserID)),
+    with: {
+      messages: true,
+      participants: {
+        columns: {},
+        with: {
+          participants: true,
+        },
+      },
+    },
+  });
+
+  if (!thread) throw new Error("Thread not found");
+
+  return thread;
+}
+export async function selectThreads(
+  currentUserID: UserID
+): Promise<ThreadWithMessagesAndParticipants[]> {
+  const selectedThreads = await db.query.threads.findMany({
+    where: and(eq(threads.userID, currentUserID), eq(threads.isDeleted, false)),
+    with: {
+      messages: {
+        where: eq(messages.isDeleted, false),
+      },
+      participants: {
+        columns: {},
+        with: {
+          participants: true,
+        },
+      },
+    },
+  });
+  return selectedThreads;
+}
+export async function selectUsers(providerID: AIProviderID) {
+  const dbUsers = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.providerID, providerID), eq(users.isSelf, false)));
+
+  return dbUsers;
+}
+export async function selectMessages(threadID: string) {
+  const threadMessages = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.threadID, threadID), eq(messages.isDeleted, false)));
+
+  return threadMessages;
+}
+
+export async function deleteThread(threadID: string) {
+  await db
+    .update(threads)
+    .set({ isDeleted: true })
+    .where(eq(threads.id, threadID));
+}
+
+export async function deleteMessages(threadID: string) {
+  await db
+    .update(messages)
+    .set({ isDeleted: true })
+    .where(eq(messages.threadID, threadID));
+}

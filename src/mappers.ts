@@ -1,10 +1,5 @@
-import { Message } from "@textshq/platform-sdk";
-import {
-  MODELS,
-  SELF_ID,
-  PROVIDERS,
-  ASSISTANT_ID,
-} from "./constants";
+import { Message, UserID } from "@textshq/platform-sdk";
+import { MODELS, PROVIDERS, ACTION_ID } from "./constants";
 import { randomUUID as uuid } from "crypto";
 import {
   AIOptions,
@@ -37,7 +32,7 @@ export function getDefaultMessage(
     id: uuid(),
     timestamp: new Date(),
     text: `This is the start of your conversation with ${fullName}. You can ask it anything you want!`,
-    senderID: "action",
+    senderID: ACTION_ID,
     isSender: false,
     isAction: true,
     threadID: thread,
@@ -109,15 +104,16 @@ export function getModelInfo(modelID: string, provider: AIProviderID) {
 
 export function mapMessagesToPrompt(
   messages: Message[],
+  userID: UserID,
   promptType?: PromptType
 ): string | CohereChatCompletionMessage[] | ChatCompletionMessageParam[] {
   const filteredMessages = (messages || []).filter((msg) => {
-    return msg.senderID === ASSISTANT_ID || msg.senderID === SELF_ID;
+    return msg.senderID !== ACTION_ID;
   });
 
   const msgs = filteredMessages.map((m) => ({
     role:
-      m.senderID === SELF_ID ? "user" : ("assistant" as "user" | "assistant"),
+      m.senderID === userID ? "user" : ("assistant" as "user" | "assistant"),
     content: m.text ?? "",
   }));
 

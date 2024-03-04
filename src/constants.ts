@@ -9,8 +9,7 @@ import {
 } from "./icons";
 import { AIProvider, AIProviderID, AIProviderModel } from "./types";
 
-export const SELF_ID = "human";
-export const ASSISTANT_ID = "ai";
+export const ACTION_ID = "action";
 
 export const MODELS: AIProviderModel[] = [
   {

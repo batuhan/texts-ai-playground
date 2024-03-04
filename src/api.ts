@@ -18,10 +18,14 @@ import {
   texts,
   PaginatedWithCursors,
   ThreadFolderName,
+  ThreadType,
+  Participant,
+  ThreadID,
+  ServerEvent,
 } from "@textshq/platform-sdk";
 import { orderBy } from "lodash";
 import OpenAI from "openai";
-import { randomUUID as uuid } from "crypto";
+import { randomUUID, randomUUID as uuid } from "crypto";
 import {
   AIStreamCallbacksAndOptions,
   HuggingFaceStream,
@@ -29,13 +33,12 @@ import {
   StreamingTextResponse,
 } from "ai";
 import {
-  ASSISTANT_ID,
+  ACTION_ID,
   ASSISTANT_MODELS,
   COMMANDS,
   MODELS,
   MODEL_TYPES,
   PROVIDER_IDS,
-  SELF_ID,
   TITLE_MODELS,
 } from "./constants";
 import { ChatCompletionMessageParam } from "openai/resources";
@@ -53,12 +56,31 @@ import {
   AIOptions,
   AIProviderID,
   CohereChatCompletionMessage,
+  MessageDBInsert,
   ModelType,
   PromptType,
+  ThreadDBInsert,
+  ThreadWithMessagesAndParticipants,
+  UserDBInsert,
 } from "./types";
 import CohereAPI, { processCohereResponse } from "./cohere";
 import ReplicateAPI, { processReplicateResponse } from "./replicate";
-import { createReadStream, readFileSync } from "fs";
+import { createReadStream } from "fs";
+import { db } from "./db";
+import { messages, participants, threads, users } from "./db/schema";
+import {
+  deleteMessages,
+  deleteThread,
+  selectMessages,
+  selectThread,
+  selectThreads,
+} from "./db/repo";
+import {
+  mapDbMessageToTextsMessage,
+  mapDbThreadToTextsThread,
+} from "./db/mappers";
+import { eq } from "drizzle-orm";
+import { seedDB } from "./db/seed";
 
 export default class ChatGPT implements PlatformAPI {
   private currentUser: CurrentUser;
@@ -106,22 +128,32 @@ export default class ChatGPT implements PlatformAPI {
     const displayText = `${getProviderName(creds.custom.provider)} ${
       creds.custom.label
     }`;
+
+    const id = `${this.provider}-${randomUUID()}`;
+
     this.currentUser = {
-      id: `${this.provider}-${this.apiKey}`, // should uuid or smth
+      id: id,
       displayText,
-      username: "User",
+      fullName: "User",
     };
 
-    texts.log("Logging in with creds");
+    const user: UserDBInsert = {
+      id: id,
+      providerID: creds.custom.provider,
+      fullName: "AI Playground",
+      isSelf: true,
+    };
+
+    await db.insert(users).values(user);
+    await seedDB();
+
+    console.log("Logging in with creds");
     this.initProvider(creds.custom.provider);
 
     // Handle OpenAI Assistant Creation
     if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
-      texts.log("Creating assistant");
-      texts.log(creds.custom.files);
       const filePaths = creds.custom.files;
-      const fileIds = await this.createFiles(creds.custom.files);
-      texts.log(fileIds);
+      const fileIds = await this.createFiles(filePaths);
       const assistantId = await this.createAssistant(fileIds);
       this.assistantID = assistantId;
     }
@@ -156,7 +188,23 @@ export default class ChatGPT implements PlatformAPI {
     inboxName: ThreadFolderName,
     pagination?: PaginationArg | undefined
   ): Promise<PaginatedWithCursors<Thread>> => {
-    const items = [...this.threads.values()];
+    const dbThreads = await selectThreads(this.currentUser.id);
+
+    if (!dbThreads) {
+      return {
+        items: [],
+        hasMore: false,
+        oldestCursor: "0",
+      };
+    }
+
+    const threads = dbThreads.map(
+      (threadData: ThreadWithMessagesAndParticipants) => {
+        const textsData = mapDbThreadToTextsThread(threadData);
+        return textsData;
+      }
+    );
+
     if (inboxName === InboxName.REQUESTS) {
       return {
         items: [] as Thread[],
@@ -165,7 +213,7 @@ export default class ChatGPT implements PlatformAPI {
       };
     }
     return {
-      items,
+      items: threads,
       hasMore: false,
       oldestCursor: "0",
     };
@@ -174,10 +222,43 @@ export default class ChatGPT implements PlatformAPI {
   getMessages = async (
     threadID: string,
     pagination?: PaginationArg
-  ): Promise<Paginated<Message>> => ({
-    items: orderBy(this.messages.get(threadID) || [], "timestamp"),
-    hasMore: false,
-  });
+  ): Promise<Paginated<Message>> => {
+    console.log("getMessages");
+    const dbMessages = await selectMessages(threadID);
+    const thread = this.threads.get(threadID);
+
+    if (!dbMessages) {
+      const defaultMessageArray = [
+        getDefaultMessage(thread.extra.aiModelId, this.provider, threadID),
+      ];
+
+      this.messages.set(threadID, defaultMessageArray);
+      this.threads.set(threadID, {
+        ...thread,
+        messages: { items: [], hasMore: false },
+      });
+      return {
+        items: [],
+        hasMore: false,
+      };
+    }
+
+    const messages = dbMessages.map((message) => {
+      const textsData = mapDbMessageToTextsMessage(message);
+      return textsData;
+    });
+
+    this.messages.set(threadID, messages);
+    this.threads.set(threadID, {
+      ...thread,
+      messages: { items: messages, hasMore: false },
+    });
+
+    return {
+      items: orderBy(messages, "timestamp"),
+      hasMore: false,
+    };
+  };
 
   searchUsers = async () => {
     const provider = MODELS.find((mdl) => mdl.provider === this.provider);
@@ -209,40 +290,92 @@ export default class ChatGPT implements PlatformAPI {
       threadID = uuid();
     }
 
-    const thread: Thread = {
+    const type: ThreadType = "single";
+
+    const threadExtra = {
+      aiModelId: modelID,
+      titleGenerated: false,
+      promptType: modelInfo.promptType,
+      modelType: modelInfo.modelType,
+      ...options,
+    };
+    const timestamp = new Date();
+
+    // Create the thread in the database
+    const threadCommon = {
       id: threadID,
-      type: "single",
-      timestamp: new Date(),
-      description: `Chat with ${modelID}`,
+      type,
+      title: `Chat with ${modelID}`,
+      isUnread: false,
+      isReadOnly: false,
+      extra: threadExtra,
+      userID: this.currentUser.id,
+      imgURL: model.imgURL,
+    };
+
+    const dbThread: ThreadDBInsert = {
+      ...threadCommon,
+      timestamp: timestamp.toISOString(),
+    };
+
+    await db.insert(threads).values(dbThread);
+
+    // Create AI User
+    const aiID = modelID + uuid();
+    const aiParticipant: UserDBInsert = {
+      id: aiID,
+      providerID: this.provider,
+      fullName: modelID,
+      imgURL: model.imgURL,
+      isSelf: false,
+    };
+
+    await db.insert(users).values(aiParticipant);
+
+    const userParticipant: Participant = {
+      id: this.currentUser.id,
+      fullName: "You",
+      isSelf: true,
+    };
+
+    await db.insert(participants).values([
+      {
+        userID: this.currentUser.id,
+        threadID,
+      },
+      {
+        userID: aiParticipant.id,
+        threadID,
+      },
+    ]);
+
+    const defaultMessage = getDefaultMessage(modelID, this.provider);
+
+    const thread: Thread = {
+      ...threadCommon,
+      timestamp: timestamp,
       messages: {
-        items: [getDefaultMessage(modelID, this.provider)],
+        items: [defaultMessage],
         hasMore: false,
       },
       participants: {
         hasMore: false,
-        items: [
-          {
-            id: modelID,
-            fullName: `${fullName} (${Date.now()})`,
-            imgURL: modelInfo.modelImage,
-          },
-        ],
+        items: [aiParticipant, userParticipant],
       },
       isUnread: false,
       isReadOnly: false,
-      extra: {
-        aiModelId: modelID,
-        titleGenerated: false,
-        promptType: modelInfo.promptType,
-        modelType: modelInfo.modelType,
-        ...options,
-      },
+      extra: threadExtra,
     };
     this.threads.set(thread.id, thread);
     return thread;
   };
 
-  getThread = async (threadID: string) => this.threads.get(threadID);
+  getThread = async (threadID: string) => {
+    const dbThread = await selectThread(threadID, this.currentUser.id);
+    const thread = mapDbThreadToTextsThread(dbThread);
+    this.threads.set(thread.id, thread);
+    return thread;
+  };
 
   getCallbacks = (
     threadID: string,
@@ -283,7 +416,7 @@ export default class ChatGPT implements PlatformAPI {
           },
         ]);
       },
-      onFinal: async () => {
+      onFinal: async (completion: string) => {
         this.eventHandler([
           {
             type: ServerEventType.USER_ACTIVITY,
@@ -292,6 +425,15 @@ export default class ChatGPT implements PlatformAPI {
             participantID: modelID,
           },
         ]);
+        const messageToInsert: MessageDBInsert = {
+          ...aiMessage,
+          timestamp: aiMessage.timestamp.toISOString(),
+          editedTimestamp: undefined,
+          text: completion,
+          seen: true,
+        };
+
+        await db.insert(messages).values(messageToInsert);
       },
     };
   };
@@ -302,24 +444,84 @@ export default class ChatGPT implements PlatformAPI {
     options?: MessageSendOptions
   ) => {
     const { text } = content;
-    const thread = this.threads.get(threadID);
+    const dbThread = await selectThread(threadID, this.currentUser.id);
+    const thread = mapDbThreadToTextsThread(dbThread);
+    this.threads.set(thread.id, thread);
     if (!thread) return false;
-    const modelID = thread.extra?.aiModelId;
     const extras = thread.extra;
+    const modelID = extras.aiModelId;
     const modelType = extras.modelType as ModelType;
 
     // If the user sends and empty message, return an error
     if (!text) return false;
 
+    const messageID = options?.pendingMessageID || uuid();
+    const timestamp = new Date();
+
+    const messageCommon = {
+      id: messageID,
+      text,
+      senderID: this.currentUser.id,
+      isSender: true,
+      isDelivered: true,
+      isAction: false,
+    };
+
+    const message: Message = {
+      _original: JSON.stringify(text),
+      timestamp: timestamp,
+      ...messageCommon,
+    };
+
+    const dbUserMessage: MessageDBInsert = {
+      threadID,
+      timestamp: timestamp.toISOString(),
+      ...messageCommon,
+    };
+
+    await db.insert(messages).values(dbUserMessage);
+
     // Only handle commands if the provider is not OpenAI Assistant
     if (modelType !== MODEL_TYPES.ASSISTANT) {
       // Clears the conversation if the user sends /clear or /reset
       if (text.startsWith(COMMANDS.CLEAR) || text.startsWith(COMMANDS.RESET)) {
-        this.messages.set(threadID, [
-          getDefaultMessage(modelID, this.provider),
-        ]);
+        // Delete messages on db and update title generated
+        await deleteMessages(threadID);
+        await db
+          .update(threads)
+          .set({
+            extra: {
+              ...thread.extra,
+              titleGenerated: false,
+            },
+          })
+          .where(eq(threads.id, threadID));
         thread.extra.titleGenerated = false;
-        return true;
+
+        // Clear the conversation in memory
+        const newThread = {
+          ...thread,
+          messages: { items: [], hasMore: false },
+        };
+        this.threads.set(threadID, newThread);
+        this.messages.set(threadID, []);
+
+        // Sync event to delete messages
+        const event: ServerEvent = {
+          type: ServerEventType.STATE_SYNC,
+          objectName: "message",
+          mutationType: "delete-all",
+          objectIDs: { threadID },
+        };
+
+        this.eventHandler([event]);
+
+        const defaultMessage = getDefaultMessage(
+          modelID,
+          this.provider,
+          threadID
+        );
+        return [defaultMessage];
       }
 
       // Extract the valid options for the current model from extras
@@ -347,6 +549,11 @@ export default class ChatGPT implements PlatformAPI {
 
         this.sendCommandMessage(threadID, `Set ${key} to ${value}`);
         thread.extra[key] = +value;
+        await db
+          .update(threads)
+          .set({ extra: thread.extra })
+          .where(eq(threads.id, threadID));
+
         return true;
       }
 
@@ -371,17 +578,9 @@ export default class ChatGPT implements PlatformAPI {
       }
     }
 
-    const messageID = options?.pendingMessageID;
-
-    const message: Message = {
-      _original: JSON.stringify(text),
-      id: messageID || uuid(),
-      timestamp: new Date(),
-      text,
-      senderID: SELF_ID,
-      isSender: true,
-      isDelivered: true,
-    };
+    const aiParticipant = thread.participants.items.find(
+      (p) => p.isSelf === false
+    );
 
     // Set AI Activity to thinking
     this.eventHandler([
@@ -390,7 +589,7 @@ export default class ChatGPT implements PlatformAPI {
         activityType: ActivityType.CUSTOM,
         customLabel: "thinking",
         threadID,
-        participantID: modelID,
+        participantID: aiParticipant.id,
         durationMs: 30_000,
       },
     ]);
@@ -412,10 +611,14 @@ export default class ChatGPT implements PlatformAPI {
 
     const aiMessage: Message = {
       id: uuid(),
-      timestamp: new Date(),
+      senderID: aiParticipant.id,
+      threadID: threadID,
       text: " ",
-      senderID: ASSISTANT_ID,
+      timestamp: new Date(),
       isSender: false,
+      seen: true,
+      isDelivered: true,
+      isAction: false,
     };
 
     // Extract the current options for the current model from extras
@@ -484,7 +687,11 @@ export default class ChatGPT implements PlatformAPI {
         ? getModelPromptType(modelID, providerID)
         : extras.promptType;
 
-      const msgs = mapMessagesToPrompt(messages, promptType);
+      const msgs = mapMessagesToPrompt(
+        messages,
+        this.currentUser.id,
+        promptType
+      );
 
       if (providerID === PROVIDER_IDS.OPENAI) {
         const openaiResponse = await this.openai.chat.completions.create({
@@ -637,6 +844,7 @@ export default class ChatGPT implements PlatformAPI {
         await processCohereResponse(cohereResponse, callbacks);
       }
     } catch (e) {
+      console.log(e);
       this.sendError(threadID, e);
     }
   };
@@ -646,15 +854,20 @@ export default class ChatGPT implements PlatformAPI {
       id: "error-" + uuid(),
       timestamp: new Date(),
       text: "Error: " + e.message ? e.message : e,
-      senderID: "none",
+      senderID: ACTION_ID,
       isAction: true,
     };
+    const thread = this.threads.get(threadID);
+    const aiParticipant = thread?.participants.items.find(
+      (p) => p.isSelf === false
+    );
+
     this.eventHandler([
       {
         type: ServerEventType.USER_ACTIVITY,
         activityType: ActivityType.NONE,
         threadID,
-        participantID: ASSISTANT_ID,
+        participantID: aiParticipant.id,
       },
       {
         type: ServerEventType.STATE_SYNC,
@@ -672,15 +885,27 @@ export default class ChatGPT implements PlatformAPI {
       id: uuid(),
       timestamp: new Date(),
       text,
-      senderID: "action",
-      isSender: true,
+      senderID: ACTION_ID,
+      isSender: false,
       isAction: true,
     };
+
+    await db.insert(messages).values({
+      id: message.id,
+      threadID,
+      timestamp: message.timestamp.toISOString(),
+      text: message.text,
+      senderID: message.senderID,
+      isSender: message.isSender,
+      isAction: message.isAction,
+    });
 
     const msgs = this.messages.get(threadID) || [
       getDefaultMessage(modelID, this.provider),
     ];
+
     msgs.push(message);
+
     this.messages.set(threadID, msgs);
   };
 
@@ -728,7 +953,13 @@ export default class ChatGPT implements PlatformAPI {
       },
       onFinal: async () => {
         const thread = this.threads.get(threadID);
+        const newExtras = { ...thread.extra, titleGenerated: true };
         thread?.extra && (thread.extra.titleGenerated = true);
+
+        await db
+          .update(threads)
+          .set({ extra: newExtras, title: generatedTitle.join("") })
+          .where(eq(threads.id, threadID));
       },
     };
   };
@@ -756,7 +987,7 @@ export default class ChatGPT implements PlatformAPI {
             id: uuid(),
             timestamp: new Date(),
             text: prompt,
-            senderID: SELF_ID,
+            senderID: "none",
           },
         ];
         this.getAIChatCompletion(
@@ -960,6 +1191,11 @@ export default class ChatGPT implements PlatformAPI {
         participantID: modelID,
       },
     ]);
+  };
+
+  deleteThread = async (threadID: ThreadID) => {
+    this.threads.delete(threadID);
+    await deleteThread(threadID);
   };
 
   sendActivityIndicator = (threadId: string) => {};

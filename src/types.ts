@@ -1,4 +1,6 @@
 import { ChatCompletionContentPart } from "openai/resources";
+import { messages, threads, users } from "./db/schema";
+import { selectThread } from "./db/repo";
 
 export type AIOptions =
   | {
@@ -74,3 +76,15 @@ export type CohereChatCompletionMessage = {
   message: string | null | ChatCompletionContentPart[];
   role: "USER" | "CHATBOT";
 };
+
+export type ThreadDBInsert = typeof threads.$inferInsert;
+export type UserDBInsert = typeof users.$inferInsert;
+export type MessageDBInsert = typeof messages.$inferInsert;
+
+export type ThreadDBSelect = typeof threads.$inferSelect;
+export type UserDBSelect = typeof users.$inferSelect;
+export type MessageDBSelect = typeof messages.$inferSelect;
+
+export type ThreadWithMessagesAndParticipants = Awaited<
+  ReturnType<typeof selectThread>
+>;
