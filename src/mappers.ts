@@ -1,32 +1,31 @@
-import { Message, UserID } from "@textshq/platform-sdk";
-import { MODELS, PROVIDERS, ACTION_ID } from "./constants";
-import { randomUUID as uuid } from "crypto";
+import { Message, UserID } from '@textshq/platform-sdk'
+import { randomUUID as uuid } from 'crypto'
+import { ChatCompletionMessageParam } from 'openai/resources'
+import {
+  experimental_buildLlama2Prompt,
+  experimental_buildOpenAssistantPrompt,
+  experimental_buildStarChatBetaPrompt,
+} from 'ai/prompts'
 import {
   AIOptions,
   AIProvider,
   AIProviderID,
   CohereChatCompletionMessage,
   PromptType,
-} from "./types";
-import { ChatCompletionMessageParam } from "openai/resources";
-import {
-  experimental_buildLlama2Prompt,
-  experimental_buildOpenAssistantPrompt,
-  experimental_buildStarChatBetaPrompt,
-} from "ai/prompts";
+} from './types'
+import { MODELS, PROVIDERS, ACTION_ID } from './constants'
 
 export function getDefaultMessage(
   modelID: string,
   provider: AIProviderID,
-  threadID?: string
+  threadID?: string,
 ): Message {
   const providerModels = MODELS.find(
-    (mdl) => mdl.provider === provider
-  )?.models;
-  const fullName =
-    providerModels &&
-    providerModels.find((mdl) => mdl.id === modelID)?.fullName;
-  const thread = threadID ? threadID : modelID;
+    mdl => mdl.provider === provider,
+  )?.models
+  const fullName = providerModels
+    && providerModels.find(mdl => mdl.id === modelID)?.fullName
+  const thread = threadID || modelID
 
   return {
     id: uuid(),
@@ -36,120 +35,112 @@ export function getDefaultMessage(
     isSender: false,
     isAction: true,
     threadID: thread,
-  };
+  }
 }
 
 export function getModelOptions(
   modelID: string,
   provider: AIProviderID,
-  currentOptions?: AIOptions
+  currentOptions?: AIOptions,
 ): AIOptions {
   const providerModels = MODELS.find(
-    (mdl) => mdl.provider === provider
-  )?.models;
+    mdl => mdl.provider === provider,
+  )?.models
 
-  const model =
-    providerModels && providerModels.find((mdl) => mdl.id === modelID);
+  const model = providerModels && providerModels.find(mdl => mdl.id === modelID)
 
-  if (!model) throw new Error(`Model ${modelID} not found`);
+  if (!model) throw new Error(`Model ${modelID} not found`)
 
-  const defaultOptions = model.options;
-  const options = { ...defaultOptions, ...(currentOptions || {}) };
+  const defaultOptions = model.options
+  const options = { ...defaultOptions, ...(currentOptions || {}) }
 
-  return options;
+  return options
 }
 
 export function getModelPromptType(modelID: string, provider: AIProviderID) {
   const providerModels = MODELS.find(
-    (mdl) => mdl.provider === provider
-  )?.models;
+    mdl => mdl.provider === provider,
+  )?.models
 
-  const model =
-    providerModels && providerModels.find((mdl) => mdl.id === modelID);
+  const model = providerModels && providerModels.find(mdl => mdl.id === modelID)
 
-  if (!model) throw new Error(`Model ${modelID} not found`);
+  if (!model) throw new Error(`Model ${modelID} not found`)
 
-  return model.promptType;
+  return model.promptType
 }
 
 export function getProviderName(providerID: AIProviderID) {
   const provider = PROVIDERS.find(
-    (provider: AIProvider) => provider.id === providerID
-  );
+    (provider: AIProvider) => provider.id === providerID,
+  )
 
   if (!provider) {
-    throw new Error(`Provider ${providerID} not found`);
+    throw new Error(`Provider ${providerID} not found`)
   }
 
-  return provider.fullName;
+  return provider.fullName
 }
 
 export function getModelInfo(modelID: string, provider: AIProviderID) {
   const providerModels = MODELS.find(
-    (mdl) => mdl.provider === provider
-  )?.models;
-  const modelInfo =
-    providerModels && providerModels.find((mdl) => mdl.id === modelID);
+    mdl => mdl.provider === provider,
+  )?.models
+  const modelInfo = providerModels && providerModels.find(mdl => mdl.id === modelID)
 
   if (!modelInfo) {
-    throw new Error(`Model ${modelID} not found`);
+    throw new Error(`Model ${modelID} not found`)
   }
 
   return {
     promptType: modelInfo.promptType,
     modelType: modelInfo.modelType,
     modelImage: modelInfo.imgURL,
-  };
+  }
 }
 
 export function mapMessagesToPrompt(
   messages: Message[],
   userID: UserID,
-  promptType?: PromptType
+  promptType?: PromptType,
 ): string | CohereChatCompletionMessage[] | ChatCompletionMessageParam[] {
-  const filteredMessages = (messages || []).filter((msg) => {
-    return msg.senderID !== ACTION_ID;
-  });
+  const filteredMessages = (messages || []).filter(msg => msg.senderID !== ACTION_ID)
 
-  const msgs = filteredMessages.map((m) => ({
+  const msgs = filteredMessages.map(m => ({
     role:
-      m.senderID === userID ? "user" : ("assistant" as "user" | "assistant"),
-    content: m.text ?? "",
-  }));
+      m.senderID === userID ? 'user' : ('assistant' as 'user' | 'assistant'),
+    content: m.text ?? '',
+  }))
 
   {
     switch (promptType) {
-      case "openassistant":
-        return experimental_buildOpenAssistantPrompt(msgs);
-      case "llama2":
-        return experimental_buildLlama2Prompt(msgs);
-      case "starchat":
-        return experimental_buildStarChatBetaPrompt(msgs);
-      case "cohere":
-        return buildCohereChatPrompt(msgs);
-      case "default":
-        return msgs;
+      case 'openassistant':
+        return experimental_buildOpenAssistantPrompt(msgs)
+      case 'llama2':
+        return experimental_buildLlama2Prompt(msgs)
+      case 'starchat':
+        return experimental_buildStarChatBetaPrompt(msgs)
+      case 'cohere':
+        return buildCohereChatPrompt(msgs)
+      case 'default':
+        return msgs
       default:
-        return msgs;
+        return msgs
     }
   }
 }
 
 export function buildCohereChatPrompt(
-  messages: ChatCompletionMessageParam[]
+  messages: ChatCompletionMessageParam[],
 ): CohereChatCompletionMessage[] {
-  return messages.map((msg) => {
-    return {
-      message: msg.content,
-      role: msg.role === "user" ? "USER" : "CHATBOT",
-    };
-  });
+  return messages.map(msg => ({
+    message: msg.content,
+    role: msg.role === 'user' ? 'USER' : 'CHATBOT',
+  }))
 }
 
 export function mapTextToPrompt(userInput: string, modelID: string) {
-  if (modelID === "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5") {
-    return `<|prompter|>${userInput}<|endoftext|><|assistant|>`;
-  } else {
-    return userInput;
+  if (modelID === 'OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5') {
+    return `<|prompter|>${userInput}<|endoftext|><|assistant|>`
   }
+  return userInput
 }

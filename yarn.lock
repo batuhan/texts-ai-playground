@@ -2196,11 +2196,18 @@ __metadata:
 
 "@textshq/platform-sdk@file: ~/../../platform-sdk/::locator=%40textshq%2Fplatform-ai-playground%40workspace%3A.":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@file: ~/../../platform-sdk/# ~/../../platform-sdk/::hash=899edc&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
+  resolution: "@textshq/platform-sdk@file: ~/../../platform-sdk/# ~/../../platform-sdk/::hash=6cc252&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
   dependencies:
     emoji-regex: ^10.1.0
+    lodash: ^4.17.21
     qrcode.react: ^3.1.0
-  checksum: b22f0a55ea7582da8d97306c0b81d10e5f0a8d4ff20e41516861dc84eef779d80606bf92653761fe26c0db0b8291d067225818a5980b9055b96a51befd38bd0c
+    ws: ^8.15.1
+  dependenciesMeta:
+    lodash:
+      optional: true
+    ws:
+      optional: true
+  checksum: 5ea5a4a86be6494ee3ecfd919b769494882c44ef7e7b5662bd33532ded709ce41b31e3dc3342b3fb444ba96f5bef158250c2577785c03fdc4c36f9d46e3f4bab
   languageName: node
   linkType: hard
 
@@ -6275,8 +6282,8 @@ __metadata:
 
 "react@file: ~/../../react-global-shim-main/::locator=%40textshq%2Fplatform-ai-playground%40workspace%3A.":
   version: 17.0.0
-  resolution: "react@file: ~/../../react-global-shim-main/# ~/../../react-global-shim-main/::hash=e09bbf&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
-  checksum: 766ef7332d679cffdc5b8732af3f6b90db96c3e396cddfef343268a4cef3d1f2f509b0f21fc92b656a9da3a430e8b4fa9718a42f9f0389c08744c370b989a204
+  resolution: "react@file: ~/../../react-global-shim-main/# ~/../../react-global-shim-main/::hash=a84a49&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
+  checksum: a7fb5f81e903fff2845c7ec461459c8630be4fcb1a0af33cd9835f0e1dc77cf9bfdeb7d01a1680a54e338e642ca56cf87306deb7bacf49311801020313829a59
   languageName: node
   linkType: hard
 
@@ -7379,6 +7386,21 @@ __metadata:
   version: 1.0.2
   resolution: "wrappy@npm:1.0.2"
   checksum: 159da4805f7e84a3d003d8841557196034155008f817172d4e986bd591f74aa82aa7db55929a54222309e01079a65a92a9e6414da5a6aa4b01ee44a511ac3ee5
+  languageName: node
+  linkType: hard
+
+"ws@npm:^8.15.1":
+  version: 8.16.0
+  resolution: "ws@npm:8.16.0"
+  peerDependencies:
+    bufferutil: ^4.0.1
+    utf-8-validate: ">=5.0.2"
+  peerDependenciesMeta:
+    bufferutil:
+      optional: true
+    utf-8-validate:
+      optional: true
+  checksum: feb3eecd2bae82fa8a8beef800290ce437d8b8063bdc69712725f21aef77c49cb2ff45c6e5e7fce622248f9c7abaee506bae0a9064067ffd6935460c7357321b
   languageName: node
   linkType: hard
 

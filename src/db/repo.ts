@@ -1,8 +1,8 @@
-import { db } from ".";
-import { and, eq } from "drizzle-orm";
-import { messages, threads, users } from "./schema";
-import { AIProviderID, ThreadWithMessagesAndParticipants } from "../types";
-import { UserID } from "@textshq/platform-sdk";
+import { and, eq } from 'drizzle-orm'
+import { UserID } from '@textshq/platform-sdk'
+import { db } from '.'
+import { messages, threads, users } from './schema'
+import type { AIProviderID } from '../types'
 
 export async function selectThread(threadID: string, currentUserID: UserID) {
   const thread = await db.query.threads.findFirst({
@@ -16,14 +16,14 @@ export async function selectThread(threadID: string, currentUserID: UserID) {
         },
       },
     },
-  });
+  })
 
-  if (!thread) throw new Error("Thread not found");
+  if (!thread) throw new Error('Thread not found')
 
-  return thread;
+  return thread
 }
 export async function selectThreads(
-  currentUserID: UserID
+  currentUserID: UserID,
 ): Promise<ThreadWithMessagesAndParticipants[]> {
   const selectedThreads = await db.query.threads.findMany({
     where: and(eq(threads.userID, currentUserID), eq(threads.isDeleted, false)),
@@ -38,36 +38,40 @@ export async function selectThreads(
         },
       },
     },
-  });
-  return selectedThreads;
+  })
+  return selectedThreads
 }
 export async function selectUsers(providerID: AIProviderID) {
   const dbUsers = await db
     .select()
     .from(users)
-    .where(and(eq(users.providerID, providerID), eq(users.isSelf, false)));
+    .where(and(eq(users.providerID, providerID), eq(users.isSelf, false)))
 
-  return dbUsers;
+  return dbUsers
 }
 export async function selectMessages(threadID: string) {
   const threadMessages = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.threadID, threadID), eq(messages.isDeleted, false)));
+    .where(and(eq(messages.threadID, threadID), eq(messages.isDeleted, false)))
 
-  return threadMessages;
+  return threadMessages
 }
 
 export async function deleteThread(threadID: string) {
   await db
     .update(threads)
     .set({ isDeleted: true })
-    .where(eq(threads.id, threadID));
+    .where(eq(threads.id, threadID))
 }
 
 export async function deleteMessages(threadID: string) {
   await db
     .update(messages)
     .set({ isDeleted: true })
-    .where(eq(messages.threadID, threadID));
+    .where(eq(messages.threadID, threadID))
 }
+
+export type ThreadWithMessagesAndParticipants = Awaited<
+  ReturnType<typeof selectThread>
+>
