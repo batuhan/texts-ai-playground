@@ -1,9 +1,9 @@
-import { db } from '.'
+import { AIPlaygroundDatabase } from '.'
 import { MODELS, PROVIDERS } from '../constants'
 import { UserDBInsert } from '../types'
 import { users } from './schema'
 
-export async function seedDB() {
+export async function seedDB(db: AIPlaygroundDatabase) {
   const existingUsers = await db.select().from(users)
   const userInserts = []
 

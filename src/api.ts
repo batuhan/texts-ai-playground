@@ -22,6 +22,7 @@ import {
   Participant,
   ThreadID,
   ServerEvent,
+  ClientContext,
 } from '@textshq/platform-sdk'
 import { orderBy } from 'lodash'
 import OpenAI from 'openai'
@@ -66,10 +67,10 @@ import {
 } from './types'
 import CohereAPI, { processCohereResponse } from './cohere'
 import ReplicateAPI, { processReplicateResponse } from './replicate'
-import { db } from './db'
+import { AIPlaygroundDatabase, getDatabase } from './db'
 import { messages, participants, threads, users } from './db/schema'
 import {
-  ThreadWithMessagesAndParticipants,
+  type ThreadWithMessagesAndParticipants,
   deleteMessages,
   deleteThread,
   selectMessages,
@@ -105,7 +106,17 @@ export default class ChatGPT implements PlatformAPI {
 
   private eventHandler: OnServerEventCallback
 
-  init = (session: SerializedSession) => {
+  private database?: AIPlaygroundDatabase
+
+  dataDirPath?: string
+
+  accountID?: string
+
+  init = async (
+    session: SerializedSession,
+    accountInfo: ClientContext,
+  ) => {
+    this._initDB(accountInfo)
     if (session) {
       this.currentUser = session.user
       this.provider = session.provider
@@ -115,6 +126,16 @@ export default class ChatGPT implements PlatformAPI {
         this.assistantID = session.assistantID
       }
     }
+  }
+
+  _initDB = async (
+    accountInfo: ClientContext,
+  ) => {
+    if (this.database) return
+    const { accountID, dataDirPath } = accountInfo
+    this.accountID = accountID
+    this.dataDirPath = dataDirPath
+    this.database = getDatabase(this.dataDirPath)
   }
 
   login = async (creds?: LoginCreds): Promise<LoginResult> => {
@@ -146,8 +167,8 @@ export default class ChatGPT implements PlatformAPI {
       isSelf: true,
     }
 
-    await db.insert(users).values(user)
-    await seedDB()
+    await this.database.insert(users).values(user)
+    await seedDB(this.database)
 
     console.log('Logging in with creds')
     this.initProvider(creds.custom.provider)
@@ -188,7 +209,7 @@ export default class ChatGPT implements PlatformAPI {
     inboxName: ThreadFolderName,
     pagination?: PaginationArg | undefined,
   ): Promise<PaginatedWithCursors<Thread>> => {
-    const dbThreads = await selectThreads(this.currentUser.id)
+    const dbThreads = await selectThreads(this.database, this.currentUser.id)
 
     if (!dbThreads) {
       return {
@@ -224,7 +245,7 @@ export default class ChatGPT implements PlatformAPI {
     pagination?: PaginationArg,
   ): Promise<Paginated<Message>> => {
     console.log('getMessages')
-    const dbMessages = await selectMessages(threadID)
+    const dbMessages = await selectMessages(this.database, threadID)
     const thread = this.threads.get(threadID)
 
     if (!dbMessages) {
@@ -318,7 +339,7 @@ export default class ChatGPT implements PlatformAPI {
       timestamp: timestamp.toISOString(),
     }
 
-    await db.insert(threads).values(dbThread)
+    await this.database.insert(threads).values(dbThread)
 
     // Create AI User
     const aiID = modelID + uuid()
@@ -330,7 +351,7 @@ export default class ChatGPT implements PlatformAPI {
       isSelf: false,
     }
 
-    await db.insert(users).values(aiParticipant)
+    await this.database.insert(users).values(aiParticipant)
 
     const userParticipant: Participant = {
       id: this.currentUser.id,
@@ -338,7 +359,7 @@ export default class ChatGPT implements PlatformAPI {
       isSelf: true,
     }
 
-    await db.insert(participants).values([
+    await this.database.insert(participants).values([
       {
         userID: this.currentUser.id,
         threadID,
@@ -371,7 +392,7 @@ export default class ChatGPT implements PlatformAPI {
   }
 
   getThread = async (threadID: string) => {
-    const dbThread = await selectThread(threadID, this.currentUser.id)
+    const dbThread = await selectThread(this.database, threadID, this.currentUser.id)
     const thread = mapDbThreadToTextsThread(dbThread)
     this.threads.set(thread.id, thread)
     return thread
@@ -432,7 +453,7 @@ export default class ChatGPT implements PlatformAPI {
         seen: true,
       }
 
-      await db.insert(messages).values(messageToInsert)
+      await this.database.insert(messages).values(messageToInsert)
     },
   })
 
@@ -442,7 +463,7 @@ export default class ChatGPT implements PlatformAPI {
     options?: MessageSendOptions,
   ) => {
     const { text } = content
-    const dbThread = await selectThread(threadID, this.currentUser.id)
+    const dbThread = await selectThread(this.database, threadID, this.currentUser.id)
     const thread = mapDbThreadToTextsThread(dbThread)
     this.threads.set(thread.id, thread)
     if (!thread) return false
@@ -477,15 +498,15 @@ export default class ChatGPT implements PlatformAPI {
       ...messageCommon,
     }
 
-    await db.insert(messages).values(dbUserMessage)
+    await this.database.insert(messages).values(dbUserMessage)
 
     // Only handle commands if the provider is not OpenAI Assistant
     if (modelType !== MODEL_TYPES.ASSISTANT) {
       // Clears the conversation if the user sends /clear or /reset
       if (text.startsWith(COMMANDS.CLEAR) || text.startsWith(COMMANDS.RESET)) {
         // Delete messages on db and update title generated
-        await deleteMessages(threadID)
-        await db
+        await deleteMessages(this.database, threadID)
+        await this.database
           .update(threads)
           .set({
             extra: {
@@ -547,7 +568,7 @@ export default class ChatGPT implements PlatformAPI {
 
         this.sendCommandMessage(threadID, `Set ${key} to ${value}`)
         thread.extra[key] = +value
-        await db
+        await this.database
           .update(threads)
           .set({ extra: thread.extra })
           .where(eq(threads.id, threadID))
@@ -886,7 +907,7 @@ export default class ChatGPT implements PlatformAPI {
       isAction: true,
     }
 
-    await db.insert(messages).values({
+    await this.database.insert(messages).values({
       id: message.id,
       threadID,
       timestamp: message.timestamp.toISOString(),
@@ -951,7 +972,7 @@ export default class ChatGPT implements PlatformAPI {
       const newExtras = { ...thread.extra, titleGenerated: true }
       thread?.extra && (thread.extra.titleGenerated = true)
 
-      await db
+      await this.database
         .update(threads)
         .set({ extra: newExtras, title: generatedTitle.join('') })
         .where(eq(threads.id, threadID))
@@ -1187,7 +1208,7 @@ export default class ChatGPT implements PlatformAPI {
 
   deleteThread = async (threadID: ThreadID) => {
     this.threads.delete(threadID)
-    await deleteThread(threadID)
+    await deleteThread(this.database, threadID)
   }
 
   sendActivityIndicator = (threadId: string) => {}

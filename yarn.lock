@@ -2181,13 +2181,14 @@ __metadata:
     better-sqlite3: ^9.4.3
     chance: ^1.1.8
     date-fns: ^2.29.2
+    dotenv: ^16.4.5
     drizzle-kit: ^0.20.14
-    drizzle-orm: ^0.29.4
+    drizzle-orm: ^0.30.0
     eslint: ^8.30.0
     eventsource: ^2.0.2
     got: ^11.0.0
     lodash: ^4.17.21
-    openai: ^4.20.0
+    openai: ^4.28.4
     react: "file: ~/../../react-global-shim-main/"
     replicate: ^0.20.1
     typescript: ^5.0.2
@@ -3443,6 +3444,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dotenv@npm:^16.4.5":
+  version: 16.4.5
+  resolution: "dotenv@npm:16.4.5"
+  checksum: 301a12c3d44fd49888b74eb9ccf9f07a1f5df43f489e7fcb89647a2edcd84c42d6bc349dc8df099cd18f07c35c7b04685c1a4f3e6a6a9e6b30f8d48c15b7f49c
+  languageName: node
+  linkType: hard
+
 "dreamopt@npm:~0.8.0":
   version: 0.8.0
   resolution: "dreamopt@npm:0.8.0"
@@ -3476,9 +3484,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"drizzle-orm@npm:^0.29.4":
-  version: 0.29.4
-  resolution: "drizzle-orm@npm:0.29.4"
+"drizzle-orm@npm:^0.30.0":
+  version: 0.30.0
+  resolution: "drizzle-orm@npm:0.30.0"
   peerDependencies:
     "@aws-sdk/client-rds-data": ">=3"
     "@cloudflare/workers-types": ">=3"
@@ -3547,7 +3555,7 @@ __metadata:
       optional: true
     sqlite3:
       optional: true
-  checksum: 7d4d603e87983bdffeebd11881efb9086c728d5aca1bd431a5bc3faa924b76bf4b75a380a7be5d69f2267719918cd20f015a90ed5ec8750f9b5ee3a743d11e30
+  checksum: 4e4ec9d765bc0dd2674b04743a4bc4ff3d6d9ed8f11a579eaf9ce7b2608cd4b218751bfa6c20ce72b3e3a48c030cbb6081a0485e7f661405b70388b08ed82daf
   languageName: node
   linkType: hard
 
@@ -6015,9 +6023,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openai@npm:^4.20.0":
-  version: 4.20.0
-  resolution: "openai@npm:4.20.0"
+"openai@npm:^4.28.4":
+  version: 4.28.4
+  resolution: "openai@npm:4.28.4"
   dependencies:
     "@types/node": ^18.11.18
     "@types/node-fetch": ^2.6.4
@@ -6030,7 +6038,7 @@ __metadata:
     web-streams-polyfill: ^3.2.1
   bin:
     openai: bin/cli
-  checksum: 4ef466562ed6f65ea841ec81549d06fa10877628582ed201fe1d0259bb1d86432b6a81d9ff02c49d1f328ec96ef0131d54add3826277b64098ba55ea1028b2f0
+  checksum: 1eeb392bfb495a8ddc44622950de25d7782a3cc00f748919ec3bfca0775bef6653e32b0edb11cee028f140c352e1a123acad4996d7cfdcf8eec078f20e5e63d0
   languageName: node
   linkType: hard
 

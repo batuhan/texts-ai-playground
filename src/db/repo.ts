@@ -1,10 +1,10 @@
 import { and, eq } from 'drizzle-orm'
 import { UserID } from '@textshq/platform-sdk'
-import { db } from '.'
 import { messages, threads, users } from './schema'
 import type { AIProviderID } from '../types'
+import type { AIPlaygroundDatabase } from '.'
 
-export async function selectThread(threadID: string, currentUserID: UserID) {
+export async function selectThread(db: AIPlaygroundDatabase, threadID: string, currentUserID: UserID) {
   const thread = await db.query.threads.findFirst({
     where: and(eq(threads.id, threadID), eq(threads.userID, currentUserID)),
     with: {
@@ -23,6 +23,7 @@ export async function selectThread(threadID: string, currentUserID: UserID) {
   return thread
 }
 export async function selectThreads(
+  db: AIPlaygroundDatabase,
   currentUserID: UserID,
 ): Promise<ThreadWithMessagesAndParticipants[]> {
   const selectedThreads = await db.query.threads.findMany({
@@ -41,7 +42,7 @@ export async function selectThreads(
   })
   return selectedThreads
 }
-export async function selectUsers(providerID: AIProviderID) {
+export async function selectUsers(db: AIPlaygroundDatabase, providerID: AIProviderID) {
   const dbUsers = await db
     .select()
     .from(users)
@@ -49,7 +50,8 @@ export async function selectUsers(providerID: AIProviderID) {
 
   return dbUsers
 }
-export async function selectMessages(threadID: string) {
+
+export async function selectMessages(db: AIPlaygroundDatabase, threadID: string) {
   const threadMessages = await db
     .select()
     .from(messages)
@@ -58,14 +60,14 @@ export async function selectMessages(threadID: string) {
   return threadMessages
 }
 
-export async function deleteThread(threadID: string) {
+export async function deleteThread(db: AIPlaygroundDatabase, threadID: string) {
   await db
     .update(threads)
     .set({ isDeleted: true })
     .where(eq(threads.id, threadID))
 }
 
-export async function deleteMessages(threadID: string) {
+export async function deleteMessages(db: AIPlaygroundDatabase, threadID: string) {
   await db
     .update(messages)
     .set({ isDeleted: true })
@@ -73,5 +75,5 @@ export async function deleteMessages(threadID: string) {
 }
 
 export type ThreadWithMessagesAndParticipants = Awaited<
-  ReturnType<typeof selectThread>
+ReturnType<typeof selectThread>
 >

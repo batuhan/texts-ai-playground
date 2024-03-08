@@ -1,6 +1,6 @@
 import { Message, MessageBehavior, Thread, User } from '@textshq/platform-sdk'
-import {  MessageDBSelect, UserDBSelect } from '../types'
-import { ThreadWithMessagesAndParticipants } from './repo'
+import type { MessageDBSelect, UserDBSelect } from '../types'
+import type { ThreadWithMessagesAndParticipants } from './repo'
 
 export function mapDbThreadToTextsThread(
   obj: ThreadWithMessagesAndParticipants,
@@ -15,7 +15,7 @@ export function mapDbThreadToTextsThread(
     isArchived: obj.isArchived === null ? undefined : obj.isArchived,
     isPinned: obj.isPinned === null ? undefined : obj.isPinned,
     type: obj.type || 'single',
-    timestamp: new Date(obj.timestamp) || new Date(),
+    timestamp: new Date(obj.timestamp || undefined),
     imgURL: obj.imgURL === null ? undefined : obj.imgURL,
     createdAt: obj.createdAt === null ? undefined : new Date(obj.createdAt),
     description: obj.description === null ? undefined : obj.description,
@@ -40,7 +40,7 @@ export function mapDbThreadToTextsThread(
 export function mapDbMessageToTextsMessage(obj: MessageDBSelect) {
   const message: Message = {
     id: obj.id,
-    timestamp: new Date(obj.timestamp) || new Date(),
+    timestamp: new Date(obj.timestamp || undefined),
     editedTimestamp:
       obj.editedTimestamp === null ? undefined : new Date(obj.editedTimestamp),
     expiresInSeconds:

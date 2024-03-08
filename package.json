@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "main": "dist/index.js",
   "files": [
-    "dist/**/*"
+    "binaries",
+    "dist"
   ],
   "scripts": {
-    "prepack": "tsc",
-    "build": "yarn tsc",
-    "lint": "eslint src --ext ts,tsx,js,jsx --cache",
-    "migrate": "node ./dist/db/migrate.js"
+    "build": "tsc && yarn db:generate",
+    "prepack": "yarn build",
+    "db:generate": "drizzle-kit generate:sqlite",
+    "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
     "@huggingface/inference": "^2.6.4",
@@ -18,11 +19,12 @@
     "better-sqlite3": "^9.4.3",
     "chance": "^1.1.8",
     "date-fns": "^2.29.2",
-    "drizzle-orm": "^0.29.4",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.30.0",
     "eventsource": "^2.0.2",
     "got": "^11.0.0",
     "lodash": "^4.17.21",
-    "openai": "^4.20.0",
+    "openai": "^4.28.4",
     "react": "file: ~/../../react-global-shim-main/",
     "replicate": "^0.20.1"
   },

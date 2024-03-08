@@ -1,3 +1,5 @@
+import path from 'path'
+import { texts } from '@textshq/platform-sdk'
 import {
   OPENAI_SVG_DATA_URI,
   OPENAI_GPT_4_SVG_DATA_URI,
@@ -9,6 +11,14 @@ import {
 } from './icons'
 import { AIProvider, AIProviderID, AIProviderModel } from './types'
 
+const isiOS = process.platform as string === 'ios'
+const BINARIES_DIR_PATH = texts.getBinariesDirPath('ai-playground')
+
+const getBinaryPath = (binaryName: string) => (texts.IS_DEV && !isiOS
+  ? path.join(__dirname, '../binaries', binaryName)
+  : path.join(BINARIES_DIR_PATH, binaryName))
+
+export const DRIZZLE_DIR_PATH = getBinaryPath('drizzle')
 export const ACTION_ID = 'action'
 
 export const MODELS: AIProviderModel[] = [
