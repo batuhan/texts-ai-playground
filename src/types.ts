@@ -44,6 +44,12 @@ export type AIOptions =
       max_tokens: number;
       top_p: number;
       top_k: number;
+    }
+  | {
+      temperature: number;
+      max_tokens_to_sample: number;
+      top_p: number;
+      top_k: number;
     };
 
 export type PromptType =

@@ -109,9 +109,9 @@ export function mapMessagesToPrompt(
   messages: Message[],
   userID: UserID,
   promptType?: PromptType
-){
+) {
   const filteredMessages = (messages || []).filter(
-    (msg) => msg.senderID !== ACTION_ID
+    (msg) => msg.senderID !== ACTION_ID && msg.extra?.isCommand !== true
   );
 
   const msgs: AIMessage[] = filteredMessages.map((m) => ({
@@ -132,8 +132,6 @@ export function mapMessagesToPrompt(
         return buildCohereChatPrompt(msgs);
       case "google-genai":
         return buildGoogleGenAIPrompt(msgs);
-      case "anthropic":
-        return experimental_buildAnthropicPrompt(msgs);
       case "default":
         return msgs;
       default:
@@ -161,10 +159,7 @@ export function buildCohereChatPrompt(
 export function mapTextToPrompt(userInput: string, modelID: string) {
   if (modelID === "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5") {
     return `<|prompter|>${userInput}<|endoftext|><|assistant|>`;
-  } else if (
-    modelID === "claude-3-opus-20240229" ||
-    modelID === "claude-3-sonnet-20240229"
-  ) {
+  } else if (modelID === "claude-2.0" || modelID === "claude-2.1") {
     return `Human: ${userInput}\n\nAssistant:`;
   }
   return userInput;

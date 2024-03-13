@@ -161,13 +161,13 @@ export default class ChatGPT implements PlatformAPI {
     const id = `${this.provider}-${randomUUID()}`;
 
     this.currentUser = {
-      id,
+      id: id,
       displayText,
       fullName: "User",
     };
 
     const user: UserDBInsert = {
-      id,
+      id: id,
       providerID: creds.custom.provider,
       fullName: "AI Playground",
       isSelf: true,
@@ -308,7 +308,7 @@ export default class ChatGPT implements PlatformAPI {
     if (!providerModels) throw new Error("Provider model not found");
 
     const model = providerModels.find((mdl) => mdl.id === modelID);
-    const fullName = model ? model.fullName : "Unknown";
+
     let threadID = "";
 
     if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
@@ -462,6 +462,9 @@ export default class ChatGPT implements PlatformAPI {
         editedTimestamp: undefined,
         text: completion,
         seen: true,
+        extra: {
+          isCommand: false,
+        },
       };
 
       await this.database.insert(messages).values(messageToInsert);
@@ -513,7 +516,17 @@ export default class ChatGPT implements PlatformAPI {
       ...messageCommon,
     };
 
-    await this.database.insert(messages).values(dbUserMessage);
+    const commandsArray = Object.values(COMMANDS);
+
+    if (commandsArray.some((command) => text.startsWith(command))) {
+      await this.database
+        .insert(messages)
+        .values({ ...dbUserMessage, extra: { isCommand: true } });
+    } else {
+      await this.database
+        .insert(messages)
+        .values({ ...dbUserMessage, extra: { isCommand: false } });
+    }
 
     // Only handle commands if the provider is not OpenAI Assistant
     if (modelType !== MODEL_TYPES.ASSISTANT) {
@@ -911,17 +924,18 @@ export default class ChatGPT implements PlatformAPI {
         const googleResult = new StreamingTextResponse(stream);
         await googleResult.text();
       } else if (providerID === PROVIDER_IDS.ANTHROPIC) {
-        const anthropicResponse = await this.anthropic.completions.create({
-          prompt: prompt,
-          model: selectedModelID,
-          stream: true,
-          max_tokens_to_sample: 300,
-          ...options,
-        });
+        if (`max_tokens_to_sample` in options) {
+          const anthropicResponse = await this.anthropic.completions.create({
+            prompt: prompt,
+            model: selectedModelID,
+            stream: true,
+            ...options,
+          });
 
-        const stream = AnthropicStream(anthropicResponse, callbacks);
-        const anthropicResult = new StreamingTextResponse(stream);
-        await anthropicResult.text();
+          const stream = AnthropicStream(anthropicResponse, callbacks);
+          const anthropicResult = new StreamingTextResponse(stream);
+          await anthropicResult.text();
+        }
       }
     } catch (e) {
       console.log(e);
