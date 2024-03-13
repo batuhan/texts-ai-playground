@@ -8,6 +8,6 @@ export default {
   out: "./binaries/drizzle",
   driver: 'better-sqlite',
   dbCredentials: {
-    url: process.env.SQLITE_URL || "./src/db/sqlite.db",
+    url: process.env.SQLITE_URL || "./texts-ai-playground.sqlite",
   },
 } satisfies Config;
