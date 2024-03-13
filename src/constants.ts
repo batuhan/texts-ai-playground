@@ -348,6 +348,19 @@ export const MODELS: AIProviderModel[] = [
           topK: 16,
         },
       },
+      {
+        id: "gemini-pro",
+        fullName: "Gemini Pro (Completion)",
+        imgURL: GEMINI_SVG_DATA_URI,
+        promptType: "google-genai",
+        modelType: "completion",
+        options: {
+          maxOutputTokens: 200,
+          temperature: 0.9,
+          topP: 0.1,
+          topK: 16,
+        },
+      }
     ],
   },
 ];
