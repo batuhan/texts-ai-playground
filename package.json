@@ -13,9 +13,10 @@
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.3.0",
     "@huggingface/inference": "^2.6.4",
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/",
-    "ai": "^2.2.26",
+    "ai": "^3.0.9",
     "better-sqlite3": "^9.4.3",
     "chance": "^1.1.8",
     "date-fns": "^2.29.2",

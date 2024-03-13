@@ -1970,6 +1970,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@google/generative-ai@npm:^0.3.0":
+  version: 0.3.0
+  resolution: "@google/generative-ai@npm:0.3.0"
+  checksum: 63ada40c5d82c8db6d0a5ad178409a231ef434ada4914e5b61742d4aa03687317562f5b45216b2235cbcc4f1704f01e7fab4802a5936193ba66d1d59ae783529
+  languageName: node
+  linkType: hard
+
 "@huggingface/inference@npm:^2.6.4":
   version: 2.6.4
   resolution: "@huggingface/inference@npm:2.6.4"
@@ -2167,6 +2174,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@textshq/platform-ai-playground@workspace:."
   dependencies:
+    "@google/generative-ai": ^0.3.0
     "@huggingface/inference": ^2.6.4
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/"
@@ -2177,7 +2185,7 @@ __metadata:
     "@types/lodash": ^4.14.184
     "@types/node": ^18.7.13
     "@types/react": ^17.0.43
-    ai: ^2.2.26
+    ai: ^3.0.9
     better-sqlite3: ^9.4.3
     chance: ^1.1.8
     date-fns: ^2.29.2
@@ -2197,18 +2205,11 @@ __metadata:
 
 "@textshq/platform-sdk@file: ~/../../platform-sdk/::locator=%40textshq%2Fplatform-ai-playground%40workspace%3A.":
   version: 0.4.4
-  resolution: "@textshq/platform-sdk@file: ~/../../platform-sdk/# ~/../../platform-sdk/::hash=6cc252&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
+  resolution: "@textshq/platform-sdk@file: ~/../../platform-sdk/# ~/../../platform-sdk/::hash=899edc&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
   dependencies:
     emoji-regex: ^10.1.0
-    lodash: ^4.17.21
     qrcode.react: ^3.1.0
-    ws: ^8.15.1
-  dependenciesMeta:
-    lodash:
-      optional: true
-    ws:
-      optional: true
-  checksum: 5ea5a4a86be6494ee3ecfd919b769494882c44ef7e7b5662bd33532ded709ce41b31e3dc3342b3fb444ba96f5bef158250c2577785c03fdc4c36f9d46e3f4bab
+  checksum: b22f0a55ea7582da8d97306c0b81d10e5f0a8d4ff20e41516861dc84eef779d80606bf92653761fe26c0db0b8291d067225818a5980b9055b96a51befd38bd0c
   languageName: node
   linkType: hard
 
@@ -2237,6 +2238,13 @@ __metadata:
   version: 1.1.4
   resolution: "@types/chance@npm:1.1.4"
   checksum: 0ce6a654e6702237800b01ae7889209a98752ed4792d810b5007c27c046972988ac6fcc36063bdc7ede37d3ab1d0fd0a7bb3e405d4566c80debd9e663a90bbb0
+  languageName: node
+  linkType: hard
+
+"@types/diff-match-patch@npm:^1.0.36":
+  version: 1.0.36
+  resolution: "@types/diff-match-patch@npm:1.0.36"
+  checksum: 7d7ce03422fcc3e79d0cda26e4748aeb176b75ca4b4e5f38459b112bf24660d628424bdb08d330faefa69039d19a5316e7a102a8ab68b8e294c8346790e55113
   languageName: node
   linkType: hard
 
@@ -2569,22 +2577,25 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ai@npm:^2.2.26":
-  version: 2.2.26
-  resolution: "ai@npm:2.2.26"
+"ai@npm:^3.0.9":
+  version: 3.0.9
+  resolution: "ai@npm:3.0.9"
   dependencies:
     eventsource-parser: 1.0.0
+    jsondiffpatch: ^0.6.0
     nanoid: 3.3.6
     solid-swr-store: 0.10.7
     sswr: 2.0.0
     swr: 2.2.0
     swr-store: 0.10.6
     swrv: 1.0.4
+    zod-to-json-schema: ^3.22.4
   peerDependencies:
     react: ^18.2.0
     solid-js: ^1.7.7
     svelte: ^3.0.0 || ^4.0.0
     vue: ^3.3.4
+    zod: ^3.0.0
   peerDependenciesMeta:
     react:
       optional: true
@@ -2594,7 +2605,9 @@ __metadata:
       optional: true
     vue:
       optional: true
-  checksum: f83a2cf2c421db69f0adda59242c81bd3934349d6767492f16b4b0150b6544d3643bfb2d7f198102f8535b31ca1e34cebcf13724be0b58fa116feca7b338ab08
+    zod:
+      optional: true
+  checksum: bd7909e73b4a945de0b1c6ce7307c500fad1f1cc05c4bfcdbd1cb66f2ced3b1a6b94ad10b1260cc935ae1682f4bdf61ba9fe7d538440eafe4a0311633152ada1
   languageName: node
   linkType: hard
 
@@ -3089,7 +3102,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chalk@npm:^5.2.0":
+"chalk@npm:^5.2.0, chalk@npm:^5.3.0":
   version: 5.3.0
   resolution: "chalk@npm:5.3.0"
   checksum: 623922e077b7d1e9dedaea6f8b9e9352921f8ae3afe739132e0e00c275971bdd331268183b2628cf4ab1727c45ea1f28d7e24ac23ce1db1eb653c414ca8a5a80
@@ -3395,6 +3408,13 @@ __metadata:
   version: 2.0.2
   resolution: "detect-libc@npm:2.0.2"
   checksum: 2b2cd3649b83d576f4be7cc37eb3b1815c79969c8b1a03a40a4d55d83bc74d010753485753448eacb98784abf22f7dbd3911fd3b60e29fda28fed2d1a997944d
+  languageName: node
+  linkType: hard
+
+"diff-match-patch@npm:^1.0.5":
+  version: 1.0.5
+  resolution: "diff-match-patch@npm:1.0.5"
+  checksum: 841522d01b09cccbc4e4402cf61514a81b906349a7d97b67222390f2d35cf5df277cb23959eeed212d5e46afb5629cebab41b87918672c5a05c11c73688630e3
   languageName: node
   linkType: hard
 
@@ -5414,6 +5434,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jsondiffpatch@npm:^0.6.0":
+  version: 0.6.0
+  resolution: "jsondiffpatch@npm:0.6.0"
+  dependencies:
+    "@types/diff-match-patch": ^1.0.36
+    chalk: ^5.3.0
+    diff-match-patch: ^1.0.5
+  bin:
+    jsondiffpatch: bin/jsondiffpatch.js
+  checksum: 27d7aa42c3b9f9359fd179bb49c621ed848f6095615014cd0acbd29c37e364c11cb5a19c3ef2c873631e7b5f7ba6d1465978a489efa28cb1dc9fba98b0498712
+  languageName: node
+  linkType: hard
+
 "jsx-ast-utils@npm:^2.4.1 || ^3.0.0, jsx-ast-utils@npm:^3.3.3":
   version: 3.3.5
   resolution: "jsx-ast-utils@npm:3.3.5"
@@ -6290,8 +6323,8 @@ __metadata:
 
 "react@file: ~/../../react-global-shim-main/::locator=%40textshq%2Fplatform-ai-playground%40workspace%3A.":
   version: 17.0.0
-  resolution: "react@file: ~/../../react-global-shim-main/# ~/../../react-global-shim-main/::hash=a84a49&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
-  checksum: a7fb5f81e903fff2845c7ec461459c8630be4fcb1a0af33cd9835f0e1dc77cf9bfdeb7d01a1680a54e338e642ca56cf87306deb7bacf49311801020313829a59
+  resolution: "react@file: ~/../../react-global-shim-main/# ~/../../react-global-shim-main/::hash=e09bbf&locator=%40textshq%2Fplatform-ai-playground%40workspace%3A."
+  checksum: 766ef7332d679cffdc5b8732af3f6b90db96c3e396cddfef343268a4cef3d1f2f509b0f21fc92b656a9da3a430e8b4fa9718a42f9f0389c08744c370b989a204
   languageName: node
   linkType: hard
 
@@ -7397,21 +7430,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:^8.15.1":
-  version: 8.16.0
-  resolution: "ws@npm:8.16.0"
-  peerDependencies:
-    bufferutil: ^4.0.1
-    utf-8-validate: ">=5.0.2"
-  peerDependenciesMeta:
-    bufferutil:
-      optional: true
-    utf-8-validate:
-      optional: true
-  checksum: feb3eecd2bae82fa8a8beef800290ce437d8b8063bdc69712725f21aef77c49cb2ff45c6e5e7fce622248f9c7abaee506bae0a9064067ffd6935460c7357321b
-  languageName: node
-  linkType: hard
-
 "yallist@npm:^3.0.2":
   version: 3.1.1
   resolution: "yallist@npm:3.1.1"
@@ -7437,6 +7455,15 @@ __metadata:
   version: 0.1.0
   resolution: "yocto-queue@npm:0.1.0"
   checksum: f77b3d8d00310def622123df93d4ee654fc6a0096182af8bd60679ddcdfb3474c56c6c7190817c84a2785648cdee9d721c0154eb45698c62176c322fb46fc700
+  languageName: node
+  linkType: hard
+
+"zod-to-json-schema@npm:^3.22.4":
+  version: 3.22.4
+  resolution: "zod-to-json-schema@npm:3.22.4"
+  peerDependencies:
+    zod: ^3.22.4
+  checksum: 22f89d505cc3d93020de38e4471362fbecd73a8df58017553ad57fb14e69b6f2f88bcdfe9f84b291442ed0654f97344d517af291d23848e43e6e208ee23dac2b
   languageName: node
   linkType: hard
 

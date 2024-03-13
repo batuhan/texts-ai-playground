@@ -32,6 +32,12 @@ export type AIOptions =
     max_new_tokens: number
     top_p: number
     top_k: number
+  } |
+  {
+    temperature: number
+    maxOutputTokens: number
+    topP: number
+    topK: number
   }
 
 export type PromptType =
@@ -39,6 +45,7 @@ export type PromptType =
   | 'llama2'
   | 'starchat'
   | 'cohere'
+  | 'google-genai'
   | 'default'
 
 export type ModelType = 'chat' | 'completion' | 'assistant'
@@ -64,6 +71,7 @@ export type AIProviderID =
   | 'cohere'
   | 'replicate'
   | 'openai-assistant'
+  | 'google-gemini'
 
 export type AIProvider = {
   id: AIProviderID
@@ -83,3 +91,8 @@ export type MessageDBInsert = typeof messages.$inferInsert
 export type ThreadDBSelect = typeof threads.$inferSelect
 export type UserDBSelect = typeof users.$inferSelect
 export type MessageDBSelect = typeof messages.$inferSelect
+
+export type AIMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
