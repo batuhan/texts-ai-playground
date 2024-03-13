@@ -471,7 +471,7 @@ export const TITLE_MODELS = {
   HUGGINGFACE: "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
   COHERE: "command",
   GOOGLE_GEMINI: "gemini-pro",
-  ANTHROPIC: "claude-3-opus-20240229",
+  ANTHROPIC: "claude-2.1",
 };
 
 export const ASSISTANT_MODELS = {
