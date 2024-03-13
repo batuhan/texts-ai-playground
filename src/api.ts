@@ -29,6 +29,7 @@ import OpenAI from "openai";
 import { randomUUID, randomUUID as uuid } from "crypto";
 import {
   AIStreamCallbacksAndOptions,
+  AnthropicStream,
   GoogleGenerativeAIStream,
   HuggingFaceStream,
   OpenAIStream,
@@ -57,6 +58,7 @@ import {
   mapTextToPrompt,
 } from "./mappers";
 import {
+  AIMessage,
   AIOptions,
   AIProviderID,
   CohereChatCompletionMessage,
@@ -84,6 +86,7 @@ import {
 } from "./db/mappers";
 import { seedDB } from "./db/seed";
 import { Content, GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 
 export default class ChatGPT implements PlatformAPI {
   private currentUser: CurrentUser;
@@ -107,6 +110,8 @@ export default class ChatGPT implements PlatformAPI {
   private cohere: CohereAPI;
 
   private genAI: GoogleGenerativeAI;
+
+  private anthropic: Anthropic;
 
   private eventHandler: OnServerEventCallback;
 
@@ -795,6 +800,20 @@ export default class ChatGPT implements PlatformAPI {
         const stream = GoogleGenerativeAIStream(geminiStream, callbacks);
         const googleResult = new StreamingTextResponse(stream);
         await googleResult.text();
+      } else if (providerID === PROVIDER_IDS.ANTHROPIC) {
+        if ("max_tokens" in options) {
+          const anthropicResponse = await this.anthropic.messages.create({
+            messages: msgs as AIMessage[],
+            model: selectedModelID,
+            stream: true,
+            max_tokens: options.max_tokens,
+            ...options,
+          });
+
+          const stream = AnthropicStream(anthropicResponse, callbacks);
+          const anthropicResult = new StreamingTextResponse(stream);
+          await anthropicResult.text();
+        }
       }
     } catch (e) {
       this.sendError(threadID, e);
@@ -891,6 +910,18 @@ export default class ChatGPT implements PlatformAPI {
         const stream = GoogleGenerativeAIStream(geminiStream, callbacks);
         const googleResult = new StreamingTextResponse(stream);
         await googleResult.text();
+      } else if (providerID === PROVIDER_IDS.ANTHROPIC) {
+        const anthropicResponse = await this.anthropic.completions.create({
+          prompt: prompt,
+          model: selectedModelID,
+          stream: true,
+          max_tokens_to_sample: 300,
+          ...options,
+        });
+
+        const stream = AnthropicStream(anthropicResponse, callbacks);
+        const anthropicResult = new StreamingTextResponse(stream);
+        await anthropicResult.text();
       }
     } catch (e) {
       console.log(e);
@@ -1088,6 +1119,15 @@ export default class ChatGPT implements PlatformAPI {
           TITLE_MODELS.GOOGLE_GEMINI,
           this.provider
         );
+      } else if (this.provider === PROVIDER_IDS.ANTHROPIC) {
+        this.getAICompletion(
+          prompt,
+          threadID,
+          this.getTitleCallbacks(threadID, generatedTitle),
+          getModelOptions(TITLE_MODELS.ANTHROPIC, this.provider),
+          TITLE_MODELS.ANTHROPIC,
+          this.provider
+        );
       }
     } catch (e) {
       this.sendError(threadID, e);
@@ -1121,6 +1161,8 @@ export default class ChatGPT implements PlatformAPI {
       case PROVIDER_IDS.GOOGLE_GEMINI:
         this.genAI = new GoogleGenerativeAI(this.apiKey);
         break;
+      case PROVIDER_IDS.ANTHROPIC:
+        this.anthropic = new Anthropic({ apiKey: this.apiKey });
       default:
         this.openai = new OpenAI({
           apiKey: this.apiKey,

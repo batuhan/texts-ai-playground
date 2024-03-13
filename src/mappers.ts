@@ -2,6 +2,7 @@ import { Message, UserID } from "@textshq/platform-sdk";
 import { randomUUID as uuid } from "crypto";
 import { ChatCompletionMessageParam } from "openai/resources";
 import {
+  experimental_buildAnthropicPrompt,
   experimental_buildLlama2Prompt,
   experimental_buildOpenAssistantPrompt,
   experimental_buildStarChatBetaPrompt,
@@ -108,11 +109,7 @@ export function mapMessagesToPrompt(
   messages: Message[],
   userID: UserID,
   promptType?: PromptType
-):
-  | string
-  | CohereChatCompletionMessage[]
-  | ChatCompletionMessageParam[]
-  | Content[] {
+){
   const filteredMessages = (messages || []).filter(
     (msg) => msg.senderID !== ACTION_ID
   );
@@ -135,6 +132,8 @@ export function mapMessagesToPrompt(
         return buildCohereChatPrompt(msgs);
       case "google-genai":
         return buildGoogleGenAIPrompt(msgs);
+      case "anthropic":
+        return experimental_buildAnthropicPrompt(msgs);
       case "default":
         return msgs;
       default:
@@ -162,6 +161,11 @@ export function buildCohereChatPrompt(
 export function mapTextToPrompt(userInput: string, modelID: string) {
   if (modelID === "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5") {
     return `<|prompter|>${userInput}<|endoftext|><|assistant|>`;
+  } else if (
+    modelID === "claude-3-opus-20240229" ||
+    modelID === "claude-3-sonnet-20240229"
+  ) {
+    return `Human: ${userInput}\n\nAssistant:`;
   }
   return userInput;
 }

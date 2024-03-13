@@ -13,6 +13,7 @@
     "lint": "eslint src --ext ts,tsx,js,jsx --cache"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.17.2",
     "@google/generative-ai": "^0.3.0",
     "@huggingface/inference": "^2.6.4",
     "@textshq/platform-sdk": "file: ~/../../platform-sdk/",

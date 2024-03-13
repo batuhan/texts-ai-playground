@@ -9,6 +9,7 @@ import {
   COHERE_SVG_DATA_URI,
   REPLICATE_SVG_DATA_URI,
   GEMINI_SVG_DATA_URI,
+  ANTHROPIC_SVG_DATA_URI,
 } from "./icons";
 import { AIProvider, AIProviderID, AIProviderModel } from "./types";
 
@@ -348,6 +349,76 @@ export const MODELS: AIProviderModel[] = [
           topK: 16,
         },
       },
+      {
+        id: "gemini-pro",
+        fullName: "Gemini Pro (Completion)",
+        imgURL: GEMINI_SVG_DATA_URI,
+        promptType: "google-genai",
+        modelType: "completion",
+        options: {
+          maxOutputTokens: 200,
+          temperature: 0.9,
+          topP: 0.1,
+          topK: 16,
+        },
+      },
+    ],
+  },
+  {
+    provider: "anthropic",
+    models: [
+      {
+        id: "claude-3-opus-20240229",
+        fullName: "Claude 3 Opus",
+        imgURL: ANTHROPIC_SVG_DATA_URI,
+        promptType: "anthropic",
+        modelType: "chat",
+        options: {
+          max_tokens: 1024,
+          temperature: 0.9,
+          top_p: 1,
+          top_k: 50,
+        },
+      },
+      {
+        id: "claude-3-sonnet-20240229",
+        fullName: "Claude 3 Sonnet",
+        imgURL: ANTHROPIC_SVG_DATA_URI,
+        promptType: "anthropic",
+        modelType: "chat",
+        options: {
+          max_tokens: 1024,
+          temperature: 0.9,
+          top_p: 1,
+          top_k: 50,
+        },
+      },
+      {
+        id: "claude-3-opus-20240229",
+        fullName: "Claude 3 Opus (Completion)",
+        imgURL: ANTHROPIC_SVG_DATA_URI,
+        promptType: "anthropic",
+        modelType: "completion",
+        options: {
+          max_tokens: 1024,
+          temperature: 0.9,
+          top_p: 1,
+          top_k: 50,
+        },
+      },
+      {
+        id: "claude-3-sonnet-20240229",
+        fullName: "Claude 3 Sonnet (Completion)",
+        imgURL: ANTHROPIC_SVG_DATA_URI,
+        promptType: "anthropic",
+        modelType: "completion",
+        options: {
+          max_tokens: 1024,
+          temperature: 0.9,
+          top_p: 1,
+          top_k: 50,
+        },
+      },
     ],
   },
 ];
@@ -388,6 +459,11 @@ export const PROVIDERS: AIProvider[] = [
     fullName: "Google Gemini",
     imgURL: GEMINI_SVG_DATA_URI,
   },
+  {
+    id: "anthropic",
+    fullName: "Anthropic",
+    imgURL: ANTHROPIC_SVG_DATA_URI,
+  },
 ];
 
 export const PROVIDER_IDS: Record<string, AIProviderID> = {
@@ -398,6 +474,7 @@ export const PROVIDER_IDS: Record<string, AIProviderID> = {
   REPLICATE: "replicate",
   OPENAI_ASSISTANT: "openai-assistant",
   GOOGLE_GEMINI: "google-gemini",
+  ANTHROPIC: "anthropic",
 };
 
 export const TITLE_MODELS = {
@@ -407,6 +484,7 @@ export const TITLE_MODELS = {
   HUGGINGFACE: "OpenAssistant/oasst-sft-4-pythia-12b-epoch-3.5",
   COHERE: "command",
   GOOGLE_GEMINI: "gemini-pro",
+  ANTHROPIC: "claude-3-opus-20240229",
 };
 
 export const ASSISTANT_MODELS = {

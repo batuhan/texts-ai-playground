@@ -22,6 +22,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@anthropic-ai/sdk@npm:^0.17.2":
+  version: 0.17.2
+  resolution: "@anthropic-ai/sdk@npm:0.17.2"
+  dependencies:
+    "@types/node": ^18.11.18
+    "@types/node-fetch": ^2.6.4
+    abort-controller: ^3.0.0
+    agentkeepalive: ^4.2.1
+    digest-fetch: ^1.3.0
+    form-data-encoder: 1.7.2
+    formdata-node: ^4.3.2
+    node-fetch: ^2.6.7
+    web-streams-polyfill: ^3.2.1
+  checksum: 33480adddbbf905aadcb310bdbca2baa9e3ca25ae554c94c52b189bd8e8afe89577775dbcf902ab6fa252d3b3c6e4fe5e4973a7caaa2d3e5a813d3727cf98499
+  languageName: node
+  linkType: hard
+
 "@babel/code-frame@npm:^7.0.0, @babel/code-frame@npm:^7.22.13":
   version: 7.22.13
   resolution: "@babel/code-frame@npm:7.22.13"
@@ -2174,6 +2191,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@textshq/platform-ai-playground@workspace:."
   dependencies:
+    "@anthropic-ai/sdk": ^0.17.2
     "@google/generative-ai": ^0.3.0
     "@huggingface/inference": ^2.6.4
     "@textshq/eslint-config": "https://github.com/TextsHQ/eslint-config#main"
