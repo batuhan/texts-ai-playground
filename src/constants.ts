@@ -14,14 +14,15 @@ import {
 import { AIProvider, AIProviderID, AIProviderModel } from "./types";
 
 const isiOS = (process.platform as string) === "ios";
-// const BINARIES_DIR_PATH = texts.getBinariesDirPath('ai-playground')
+const BINARIES_DIR_PATH = texts.getBinariesDirPath('ai-playground')
 
-// const getBinaryPath = (binaryName: string) => (texts.IS_DEV && !isiOS
-//   ? path.join(__dirname, '../binaries', binaryName)
-//   : path.join(BINARIES_DIR_PATH, binaryName))
+const getBinaryPath = (binaryName: string) => (texts.IS_DEV && !isiOS
+  ? path.join(__dirname, '../binaries', binaryName)
+  : path.join(BINARIES_DIR_PATH, binaryName))
 
-const getBinaryPath = (binaryName: string) =>
-  path.join(__dirname, "../binaries", binaryName);
+// I need this because my platform-sdk doesnt have getBinariesDirPath
+// const getBinaryPath = (binaryName: string) =>
+//   path.join(__dirname, "../binaries", binaryName);
 
 export const DRIZZLE_DIR_PATH = getBinaryPath("drizzle");
 export const ACTION_ID = "action";
