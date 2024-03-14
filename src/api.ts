@@ -1229,7 +1229,7 @@ export default class ChatGPT implements PlatformAPI {
     aiMessage: Message,
     modelID: string
   ) => {
-    const createdMessage = await this.openai.beta.threads.messages.create(
+    await this.openai.beta.threads.messages.create(
       threadID,
       {
         role: "user",
@@ -1237,61 +1237,47 @@ export default class ChatGPT implements PlatformAPI {
       }
     );
 
-    const run = await this.openai.beta.threads.runs.create(threadID, {
-      assistant_id: this.assistantID,
-    });
+    const generatedText: string[] = [];
 
-    const waitForRun = async (run: OpenAI.Beta.Threads.Runs.Run) => {
-      // Poll for status change
-      while (run.status === "queued" || run.status === "in_progress") {
-        // delay for 500ms:
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        run = await this.openai.beta.threads.runs.retrieve(threadID, run.id);
-      }
-
-      // Check the run status
-      if (
-        run.status === "cancelled" ||
-        run.status === "cancelling" ||
-        run.status === "failed" ||
-        run.status === "expired"
-      ) {
-        texts.error(run.status);
-        throw new Error(run.status);
-      }
-    };
-
-    await waitForRun(run);
-
-    // Get the response messages
-    const responseMessages = (
-      await this.openai.beta.threads.messages.list(threadID, {
-        after: createdMessage.id,
-        order: "asc",
+    const run = this.openai.beta.threads.runs
+      .createAndStream(threadID, {
+        assistant_id: this.assistantID,
       })
-    ).data;
-
-    // Loop through the response messages and add them to the thread
-    responseMessages.forEach((message) => {
-      message.content.forEach((content) => {
-        if (content.type === "text") {
-          if (aiMessage.text && aiMessage.text[0] === " ") {
-            aiMessage.text = aiMessage.text.trimStart();
-          }
-          aiMessage.text += content.text.value;
-          this.eventHandler([
-            {
-              type: ServerEventType.STATE_SYNC,
-              objectName: "message",
-              mutationType: "upsert",
-              objectIDs: { threadID },
-              entries: [aiMessage],
-            },
-          ]);
-        }
+      .on(`textDelta`, (text) => {
+        generatedText.push(text.value);
+        aiMessage.text = generatedText.join("");
+        this.eventHandler([
+          {
+            type: ServerEventType.STATE_SYNC,
+            objectName: "message",
+            mutationType: "upsert",
+            objectIDs: { threadID },
+            entries: [aiMessage],
+          },
+        ]);
+      })
+      // .on(`toolCallDelta`, (toolCallDelta) => {
+      //   if (toolCallDelta.type === `code_interpreter`) {
+      //     console.log(toolCallDelta.code_interpreter.input);
+      //   }
+      // })
+      .on(`textDone`, async (text) => {
+        console.log(text.value);
+        const messageToInsert: MessageDBInsert = {
+          ...aiMessage,
+          timestamp: aiMessage.timestamp.toISOString(),
+          editedTimestamp: undefined,
+          text: text.value,
+          seen: true,
+          extra: {
+            isCommand: false,
+          },
+        };
+  
+        await this.database.insert(messages).values(messageToInsert);
       });
-    });
+
+    await run.done();
 
     // Set AI Activity to none
     this.eventHandler([

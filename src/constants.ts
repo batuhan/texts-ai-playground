@@ -20,7 +20,7 @@ const getBinaryPath = (binaryName: string) => (texts.IS_DEV && !isiOS
   ? path.join(__dirname, '../binaries', binaryName)
   : path.join(BINARIES_DIR_PATH, binaryName))
 
-// I need this because my platform-sdk doesnt have getBinariesDirPath
+// // I need this because my platform-sdk doesnt have getBinariesDirPath
 // const getBinaryPath = (binaryName: string) =>
 //   path.join(__dirname, "../binaries", binaryName);
 

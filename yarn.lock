@@ -2214,7 +2214,7 @@ __metadata:
     eventsource: ^2.0.2
     got: ^11.0.0
     lodash: ^4.17.21
-    openai: ^4.28.4
+    openai: ^4.29.0
     react: "file: ~/../../react-global-shim-main/"
     replicate: ^0.20.1
     typescript: ^5.0.2
@@ -6074,9 +6074,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openai@npm:^4.28.4":
-  version: 4.28.4
-  resolution: "openai@npm:4.28.4"
+"openai@npm:^4.29.0":
+  version: 4.29.0
+  resolution: "openai@npm:4.29.0"
   dependencies:
     "@types/node": ^18.11.18
     "@types/node-fetch": ^2.6.4
@@ -6089,7 +6089,7 @@ __metadata:
     web-streams-polyfill: ^3.2.1
   bin:
     openai: bin/cli
-  checksum: 1eeb392bfb495a8ddc44622950de25d7782a3cc00f748919ec3bfca0775bef6653e32b0edb11cee028f140c352e1a123acad4996d7cfdcf8eec078f20e5e63d0
+  checksum: 7c933661f4fb02ed658c2c35f3a8f351335d342f05bcd48cd9b36001993cb1b214eb004814b5abd694738be46850994cad1cee3fe8f117418d5e10bc8c60f231
   languageName: node
   linkType: hard
 
