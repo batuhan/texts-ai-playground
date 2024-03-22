@@ -11,7 +11,7 @@ Made with [Vercel AI SDK](https://sdk.vercel.ai/docs).
 - **Cohere**: Command Chat, Command Chat - Light, Command Generate, and Command Generate - Light
 - **Replicate**: Llama v2 70B Chat, Mistral 7B Instruct, Codellama 7B Instruct, and Codellama 34B Instruct
 - **Google**: Gemini, Gemini Pro
-- **Anthropic**: Claude 3 Opus, Claude 3 Sonnet, Claude 2, and Claude 2.
+- **Anthropic**: Claude 3 Opus, Claude 3 Sonnet, Claude 2, and Claude 2
 
 ## How to install
 
