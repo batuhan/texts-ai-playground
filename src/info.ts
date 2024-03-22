@@ -6,9 +6,9 @@ import {
 import { PLATFORM_ICON } from './icons'
 
 const info: PlatformInfo = {
-  name: 'ai-playground',
+  name: 'b-ai-playground',
   version: '1.0.0',
-  displayName: 'AI Playground',
+  displayName: 'B\'s AI Playground',
   icon: PLATFORM_ICON,
   loginMode: 'custom',
   deletionMode: MessageDeletionMode.UNSUPPORTED,

@@ -23,10 +23,10 @@ import {
   ThreadID,
   ServerEvent,
   ClientContext,
-} from "@textshq/platform-sdk";
-import { orderBy } from "lodash";
-import OpenAI from "openai";
-import { randomUUID, randomUUID as uuid } from "crypto";
+} from '@textshq/platform-sdk'
+import { orderBy } from 'lodash'
+import OpenAI from 'openai'
+import { randomUUID, randomUUID as uuid } from 'crypto'
 import {
   AIStreamCallbacksAndOptions,
   AnthropicStream,
@@ -34,11 +34,13 @@ import {
   HuggingFaceStream,
   OpenAIStream,
   StreamingTextResponse,
-} from "ai";
-import { ChatCompletionMessageParam } from "openai/resources";
-import { HfInference } from "@huggingface/inference";
-import { createReadStream } from "fs";
-import { eq } from "drizzle-orm";
+} from 'ai'
+import { ChatCompletionMessageParam } from 'openai/resources'
+import { HfInference } from '@huggingface/inference'
+import { createReadStream } from 'fs'
+import { eq } from 'drizzle-orm'
+import { Content, GoogleGenerativeAI } from '@google/generative-ai'
+import Anthropic from '@anthropic-ai/sdk'
 import {
   ACTION_ID,
   ASSISTANT_MODELS,
@@ -47,7 +49,7 @@ import {
   MODEL_TYPES,
   PROVIDER_IDS,
   TITLE_MODELS,
-} from "./constants";
+} from './constants'
 import {
   getDefaultMessage,
   getModelInfo,
@@ -56,7 +58,7 @@ import {
   getProviderName,
   mapMessagesToPrompt,
   mapTextToPrompt,
-} from "./mappers";
+} from './mappers'
 import {
   AIMessage,
   AIOptions,
@@ -67,11 +69,11 @@ import {
   PromptType,
   ThreadDBInsert,
   UserDBInsert,
-} from "./types";
-import CohereAPI, { processCohereResponse } from "./cohere";
-import ReplicateAPI, { processReplicateResponse } from "./replicate";
-import { AIPlaygroundDatabase, getDatabase } from "./db";
-import { messages, participants, threads, users } from "./db/schema";
+} from './types'
+import CohereAPI, { processCohereResponse } from './cohere'
+import ReplicateAPI, { processReplicateResponse } from './replicate'
+import { AIPlaygroundDatabase, getDatabase } from './db'
+import { messages, participants, threads, users } from './db/schema'
 import {
   type ThreadWithMessagesAndParticipants,
   deleteMessages,
@@ -79,246 +81,242 @@ import {
   selectMessages,
   selectThread,
   selectThreads,
-} from "./db/repo";
+} from './db/repo'
 import {
   mapDbMessageToTextsMessage,
   mapDbThreadToTextsThread,
-} from "./db/mappers";
-import { seedDB } from "./db/seed";
-import { Content, GoogleGenerativeAI } from "@google/generative-ai";
-import Anthropic from "@anthropic-ai/sdk";
+} from './db/mappers'
+import { seedDB } from './db/seed'
 
 export default class ChatGPT implements PlatformAPI {
-  private currentUser: CurrentUser;
+  private currentUser: CurrentUser
 
-  private provider: AIProviderID = "openai";
+  private provider: AIProviderID = 'openai'
 
-  private apiKey = "";
+  private apiKey = ''
 
-  private assistantID = "";
+  private assistantID = ''
 
-  private threads = new Map<Thread["id"], Thread>();
+  private threads = new Map<Thread['id'], Thread>()
 
-  private messages = new Map<Thread["id"], Message[]>();
+  private messages = new Map<Thread['id'], Message[]>()
 
-  private openai: OpenAI;
+  private openai: OpenAI
 
-  private replicate: ReplicateAPI;
+  private replicate: ReplicateAPI
 
-  private huggingface: HfInference;
+  private huggingface: HfInference
 
-  private cohere: CohereAPI;
+  private cohere: CohereAPI
 
-  private genAI: GoogleGenerativeAI;
+  private genAI: GoogleGenerativeAI
 
-  private anthropic: Anthropic;
+  private anthropic: Anthropic
 
-  private eventHandler: OnServerEventCallback;
+  private eventHandler: OnServerEventCallback
 
-  private database?: AIPlaygroundDatabase;
+  private database?: AIPlaygroundDatabase
 
-  dataDirPath?: string;
+  dataDirPath?: string
 
-  accountID?: string;
+  accountID?: string
 
   init = async (session: SerializedSession, accountInfo: ClientContext) => {
-    this._initDB(accountInfo);
+    this._initDB(accountInfo)
     if (session) {
-      this.currentUser = session.user;
-      this.provider = session.provider;
-      this.apiKey = session.apiKey;
-      this.initProvider(session.provider);
+      this.currentUser = session.user
+      this.provider = session.provider
+      this.apiKey = session.apiKey
+      this.initProvider(session.provider)
       if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
-        this.assistantID = session.assistantID;
+        this.assistantID = session.assistantID
       }
     }
-  };
+  }
 
   _initDB = async (accountInfo: ClientContext) => {
-    if (this.database) return;
-    const { accountID, dataDirPath } = accountInfo;
-    this.accountID = accountID;
-    this.dataDirPath = dataDirPath;
-    this.database = getDatabase(this.dataDirPath);
-  };
+    if (this.database) return
+    const { accountID, dataDirPath } = accountInfo
+    this.accountID = accountID
+    this.dataDirPath = dataDirPath
+    this.database = getDatabase(this.dataDirPath)
+  }
 
   login = async (creds?: LoginCreds): Promise<LoginResult> => {
-    const loginCreds =
-      creds &&
-      "custom" in creds &&
-      creds.custom &&
-      creds.custom.apiKey &&
-      creds.custom.provider;
-    if (!loginCreds)
-      return { type: "error", errorMessage: "Invalid credentials" };
+    const loginCreds = creds
+      && 'custom' in creds
+      && creds.custom
+      && creds.custom.apiKey
+      && creds.custom.provider
+    if (!loginCreds) return { type: 'error', errorMessage: 'Invalid credentials' }
 
-    this.provider = creds.custom.provider;
-    this.apiKey = creds.custom.apiKey;
+    this.provider = creds.custom.provider
+    this.apiKey = creds.custom.apiKey
     const displayText = `${getProviderName(creds.custom.provider)} ${
       creds.custom.label
-    }`;
+    }`
 
-    const id = `${this.provider}-${randomUUID()}`;
+    const id = `${this.provider}-${randomUUID()}`
 
     this.currentUser = {
-      id: id,
+      id,
       displayText,
-      fullName: "User",
-    };
+      fullName: 'User',
+    }
 
     const user: UserDBInsert = {
-      id: id,
+      id,
       providerID: creds.custom.provider,
-      fullName: "AI Playground",
+      fullName: 'AI Playground',
       isSelf: true,
-    };
+    }
 
-    await this.database.insert(users).values(user);
-    await seedDB(this.database);
+    await this.database.insert(users).values(user)
+    await seedDB(this.database)
 
-    console.log("Logging in with creds");
-    this.initProvider(creds.custom.provider);
+    console.log('Logging in with creds')
+    this.initProvider(creds.custom.provider)
 
     // Handle OpenAI Assistant Creation
     if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
-      const filePaths = creds.custom.files;
-      const fileIds = await this.createFiles(filePaths);
-      const assistantId = await this.createAssistant(fileIds);
-      this.assistantID = assistantId;
+      const filePaths = creds.custom.files
+      const fileIds = await this.createFiles(filePaths)
+      const assistantId = await this.createAssistant(fileIds)
+      this.assistantID = assistantId
     }
 
-    return { type: "success" };
-  };
+    return { type: 'success' }
+  }
 
-  dispose = () => {};
+  dispose = () => {}
 
-  getCurrentUser = () => this.currentUser;
+  getCurrentUser = () => this.currentUser
 
   serializeSession = () =>
-    this.provider === PROVIDER_IDS.OPENAI_ASSISTANT
+    (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT
       ? {
-          user: this.currentUser,
-          provider: this.provider,
-          apiKey: this.apiKey,
-          assistantID: this.assistantID,
-        }
+        user: this.currentUser,
+        provider: this.provider,
+        apiKey: this.apiKey,
+        assistantID: this.assistantID,
+      }
       : {
-          user: this.currentUser,
-          provider: this.provider,
-          apiKey: this.apiKey,
-        };
+        user: this.currentUser,
+        provider: this.provider,
+        apiKey: this.apiKey,
+      })
 
   subscribeToEvents = (onEvent: OnServerEventCallback) => {
-    this.eventHandler = onEvent;
-  };
+    this.eventHandler = onEvent
+  }
 
   getThreads = async (
     inboxName: ThreadFolderName,
-    pagination?: PaginationArg | undefined
+    pagination?: PaginationArg | undefined,
   ): Promise<PaginatedWithCursors<Thread>> => {
-    const dbThreads = await selectThreads(this.database, this.currentUser.id);
+    const dbThreads = await selectThreads(this.database, this.currentUser.id)
 
     if (!dbThreads) {
       return {
         items: [],
         hasMore: false,
-        oldestCursor: "0",
-      };
+        oldestCursor: '0',
+      }
     }
 
     const items = dbThreads.map(
       (threadData: ThreadWithMessagesAndParticipants) => {
-        const textsData = mapDbThreadToTextsThread(threadData);
-        return textsData;
-      }
-    );
+        const textsData = mapDbThreadToTextsThread(threadData)
+        return textsData
+      },
+    )
 
     if (inboxName === InboxName.REQUESTS) {
       return {
         items: [] as Thread[],
         hasMore: false,
-        oldestCursor: "0",
-      };
+        oldestCursor: '0',
+      }
     }
     return {
       items,
       hasMore: false,
-      oldestCursor: "0",
-    };
-  };
+      oldestCursor: '0',
+    }
+  }
 
   getMessages = async (
     threadID: string,
-    pagination?: PaginationArg
+    pagination?: PaginationArg,
   ): Promise<Paginated<Message>> => {
-    console.log("getMessages");
-    const dbMessages = await selectMessages(this.database, threadID);
-    const thread = this.threads.get(threadID);
+    console.log('getMessages')
+    const dbMessages = await selectMessages(this.database, threadID)
+    const thread = this.threads.get(threadID)
 
     if (!dbMessages) {
       const defaultMessageArray = [
         getDefaultMessage(thread.extra.aiModelId, this.provider, threadID),
-      ];
+      ]
 
-      this.messages.set(threadID, defaultMessageArray);
+      this.messages.set(threadID, defaultMessageArray)
       this.threads.set(threadID, {
         ...thread,
         messages: { items: [], hasMore: false },
-      });
+      })
       return {
         items: [],
         hasMore: false,
-      };
+      }
     }
 
-    const messages = dbMessages.map((message) => {
-      const textsData = mapDbMessageToTextsMessage(message);
-      return textsData;
-    });
+    const messages = dbMessages.map(message => {
+      const textsData = mapDbMessageToTextsMessage(message)
+      return textsData
+    })
 
-    this.messages.set(threadID, messages);
+    this.messages.set(threadID, messages)
     this.threads.set(threadID, {
       ...thread,
       messages: { items: messages, hasMore: false },
-    });
+    })
 
     return {
-      items: orderBy(messages, "timestamp"),
+      items: orderBy(messages, 'timestamp'),
       hasMore: false,
-    };
-  };
+    }
+  }
 
   searchUsers = async () => {
-    const provider = MODELS.find((mdl) => mdl.provider === this.provider);
-    return provider ? provider.models : [];
-  };
+    const provider = MODELS.find(mdl => mdl.provider === this.provider)
+    return provider ? provider.models : []
+  }
 
   createThread = async (
     userIDs: UserID[],
     title?: string,
-    messageText?: string
+    messageText?: string,
   ) => {
-    const modelID = userIDs[0];
-    const options = getModelOptions(modelID, this.provider);
-    const modelInfo = getModelInfo(modelID, this.provider);
+    const modelID = userIDs[0]
+    const options = getModelOptions(modelID, this.provider)
+    const modelInfo = getModelInfo(modelID, this.provider)
 
-    const provider = MODELS.find((mdl) => mdl.provider === this.provider);
-    const providerModels = provider?.models;
+    const provider = MODELS.find(mdl => mdl.provider === this.provider)
+    const providerModels = provider?.models
 
-    if (!providerModels) throw new Error("Provider model not found");
+    if (!providerModels) throw new Error('Provider model not found')
 
-    const model = providerModels.find((mdl) => mdl.id === modelID);
+    const model = providerModels.find(mdl => mdl.id === modelID)
 
-    let threadID = "";
+    let threadID = ''
 
     if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
-      const openAIThreadID = await this.createAssistantThread();
-      threadID = openAIThreadID;
+      const openAIThreadID = await this.createAssistantThread()
+      threadID = openAIThreadID
     } else {
-      threadID = uuid();
+      threadID = uuid()
     }
 
-    const type: ThreadType = "single";
+    const type: ThreadType = 'single'
 
     const threadExtra = {
       aiModelId: modelID,
@@ -326,8 +324,8 @@ export default class ChatGPT implements PlatformAPI {
       promptType: modelInfo.promptType,
       modelType: modelInfo.modelType,
       ...options,
-    };
-    const timestamp = new Date();
+    }
+    const timestamp = new Date()
 
     // Create the thread in the database
     const threadCommon = {
@@ -339,32 +337,32 @@ export default class ChatGPT implements PlatformAPI {
       extra: threadExtra,
       userID: this.currentUser.id,
       imgURL: model.imgURL,
-    };
+    }
 
     const dbThread: ThreadDBInsert = {
       ...threadCommon,
       timestamp: timestamp.toISOString(),
-    };
+    }
 
-    await this.database.insert(threads).values(dbThread);
+    await this.database.insert(threads).values(dbThread)
 
     // Create AI User
-    const aiID = modelID + uuid();
+    const aiID = modelID + uuid()
     const aiParticipant: UserDBInsert = {
       id: aiID,
       providerID: this.provider,
       fullName: modelID,
       imgURL: model.imgURL,
       isSelf: false,
-    };
+    }
 
-    await this.database.insert(users).values(aiParticipant);
+    await this.database.insert(users).values(aiParticipant)
 
     const userParticipant: Participant = {
       id: this.currentUser.id,
-      fullName: "You",
+      fullName: 'You',
       isSelf: true,
-    };
+    }
 
     await this.database.insert(participants).values([
       {
@@ -375,9 +373,9 @@ export default class ChatGPT implements PlatformAPI {
         userID: aiParticipant.id,
         threadID,
       },
-    ]);
+    ])
 
-    const defaultMessage = getDefaultMessage(modelID, this.provider);
+    const defaultMessage = getDefaultMessage(modelID, this.provider)
 
     const thread: Thread = {
       ...threadCommon,
@@ -393,59 +391,59 @@ export default class ChatGPT implements PlatformAPI {
       isUnread: false,
       isReadOnly: false,
       extra: threadExtra,
-    };
-    this.threads.set(thread.id, thread);
-    return thread;
-  };
+    }
+    this.threads.set(thread.id, thread)
+    return thread
+  }
 
   getThread = async (threadID: string) => {
     const dbThread = await selectThread(
       this.database,
       threadID,
-      this.currentUser.id
-    );
-    const thread = mapDbThreadToTextsThread(dbThread);
-    this.threads.set(thread.id, thread);
-    return thread;
-  };
+      this.currentUser.id,
+    )
+    const thread = mapDbThreadToTextsThread(dbThread)
+    this.threads.set(thread.id, thread)
+    return thread
+  }
 
   getCallbacks = (
     threadID: string,
     modelID: string,
-    aiMessage: Message
+    aiMessage: Message,
   ): AIStreamCallbacksAndOptions => ({
     onStart: async () => {
-      const messages = this.messages.get(threadID);
-      if (!messages) throw new Error("Messages not found");
-      messages.push(aiMessage);
+      const messages = this.messages.get(threadID)
+      if (!messages) throw new Error('Messages not found')
+      messages.push(aiMessage)
       this.eventHandler([
         {
           type: ServerEventType.STATE_SYNC,
-          objectName: "message",
-          mutationType: "upsert",
+          objectName: 'message',
+          mutationType: 'upsert',
           objectIDs: { threadID },
           entries: [aiMessage],
         },
-      ]);
+      ])
     },
-    onToken: async (token) => {
+    onToken: async token => {
       if (
-        aiMessage.text &&
-        aiMessage.text[0] === " " &&
-        aiMessage.text.trimStart().length > 0
+        aiMessage.text
+        && aiMessage.text[0] === ' '
+        && aiMessage.text.trimStart().length > 0
       ) {
-        aiMessage.text = aiMessage.text.trimStart();
+        aiMessage.text = aiMessage.text.trimStart()
       }
-      aiMessage.text += token;
+      aiMessage.text += token
       this.eventHandler([
         {
           type: ServerEventType.STATE_SYNC,
-          objectName: "message",
-          mutationType: "upsert",
+          objectName: 'message',
+          mutationType: 'upsert',
           objectIDs: { threadID },
           entries: [aiMessage],
         },
-      ]);
+      ])
     },
     onFinal: async (completion: string) => {
       this.eventHandler([
@@ -455,7 +453,7 @@ export default class ChatGPT implements PlatformAPI {
           threadID,
           participantID: modelID,
         },
-      ]);
+      ])
       const messageToInsert: MessageDBInsert = {
         ...aiMessage,
         timestamp: aiMessage.timestamp.toISOString(),
@@ -465,35 +463,35 @@ export default class ChatGPT implements PlatformAPI {
         extra: {
           isCommand: false,
         },
-      };
+      }
 
-      await this.database.insert(messages).values(messageToInsert);
+      await this.database.insert(messages).values(messageToInsert)
     },
-  });
+  })
 
   sendMessage = async (
     threadID: string,
     content: MessageContent,
-    options?: MessageSendOptions
+    options?: MessageSendOptions,
   ) => {
-    const { text } = content;
+    const { text } = content
     const dbThread = await selectThread(
       this.database,
       threadID,
-      this.currentUser.id
-    );
-    const thread = mapDbThreadToTextsThread(dbThread);
-    this.threads.set(thread.id, thread);
-    if (!thread) return false;
-    const extras = thread.extra;
-    const modelID = extras.aiModelId;
-    const modelType = extras.modelType as ModelType;
+      this.currentUser.id,
+    )
+    const thread = mapDbThreadToTextsThread(dbThread)
+    this.threads.set(thread.id, thread)
+    if (!thread) return false
+    const extras = thread.extra
+    const modelID = extras.aiModelId
+    const modelType = extras.modelType as ModelType
 
     // If the user sends and empty message, return an error
-    if (!text) return false;
+    if (!text) return false
 
-    const messageID = options?.pendingMessageID || uuid();
-    const timestamp = new Date();
+    const messageID = options?.pendingMessageID || uuid()
+    const timestamp = new Date()
 
     const messageCommon = {
       id: messageID,
@@ -502,30 +500,30 @@ export default class ChatGPT implements PlatformAPI {
       isSender: true,
       isDelivered: true,
       isAction: false,
-    };
+    }
 
     const message: Message = {
       _original: JSON.stringify(text),
       timestamp,
       ...messageCommon,
-    };
+    }
 
     const dbUserMessage: MessageDBInsert = {
       threadID,
       timestamp: timestamp.toISOString(),
       ...messageCommon,
-    };
+    }
 
-    const commandsArray = Object.values(COMMANDS);
+    const commandsArray = Object.values(COMMANDS)
 
-    if (commandsArray.some((command) => text.startsWith(command))) {
+    if (commandsArray.some(command => text.startsWith(command))) {
       await this.database
         .insert(messages)
-        .values({ ...dbUserMessage, extra: { isCommand: true } });
+        .values({ ...dbUserMessage, extra: { isCommand: true } })
     } else {
       await this.database
         .insert(messages)
-        .values({ ...dbUserMessage, extra: { isCommand: false } });
+        .values({ ...dbUserMessage, extra: { isCommand: false } })
     }
 
     // Only handle commands if the provider is not OpenAI Assistant
@@ -533,7 +531,7 @@ export default class ChatGPT implements PlatformAPI {
       // Clears the conversation if the user sends /clear or /reset
       if (text.startsWith(COMMANDS.CLEAR) || text.startsWith(COMMANDS.RESET)) {
         // Delete messages on db and update title generated
-        await deleteMessages(this.database, threadID);
+        await deleteMessages(this.database, threadID)
         await this.database
           .update(threads)
           .set({
@@ -542,144 +540,144 @@ export default class ChatGPT implements PlatformAPI {
               titleGenerated: false,
             },
           })
-          .where(eq(threads.id, threadID));
-        thread.extra.titleGenerated = false;
+          .where(eq(threads.id, threadID))
+        thread.extra.titleGenerated = false
 
         // Clear the conversation in memory
         const newThread = {
           ...thread,
           messages: { items: [], hasMore: false },
-        };
-        this.threads.set(threadID, newThread);
-        this.messages.set(threadID, []);
+        }
+        this.threads.set(threadID, newThread)
+        this.messages.set(threadID, [])
 
         // Sync event to delete messages
         const event: ServerEvent = {
           type: ServerEventType.STATE_SYNC,
-          objectName: "message",
-          mutationType: "delete-all",
+          objectName: 'message',
+          mutationType: 'delete-all',
           objectIDs: { threadID },
-        };
+        }
 
-        this.eventHandler([event]);
+        this.eventHandler([event])
 
         const defaultMessage = getDefaultMessage(
           modelID,
           this.provider,
-          threadID
-        );
-        return [defaultMessage];
+          threadID,
+        )
+        return [defaultMessage]
       }
 
       // Extract the valid options for the current model from extras
-      const extrasKeysArray = Array.from(Object.keys(thread.extra));
+      const extrasKeysArray = Array.from(Object.keys(thread.extra))
       const validOptions = extrasKeysArray.filter(
-        (key) =>
-          !["aiModelId", "titleGenerated", "promptType", "modelType"].includes(
-            key
-          )
-      );
+        key =>
+          !['aiModelId', 'titleGenerated', 'promptType', 'modelType'].includes(
+            key,
+          ),
+      )
 
       // If the user sends /set, set the value as the new option value
       if (text.startsWith(COMMANDS.SET)) {
-        const [_, key, value] = text.split(" ");
+        const [_, key, value] = text.split(' ')
 
         // If the key is not valid, return an error
         if (!validOptions.includes(key) || !value || isNaN(+value)) {
           this.sendCommandMessage(
             threadID,
-            `Key ${key} not assignable for this model`
-          );
-          texts.log(`invalid key : ${key}`);
-          return true;
+            `Key ${key} not assignable for this model`,
+          )
+          texts.log(`invalid key : ${key}`)
+          return true
         }
 
-        this.sendCommandMessage(threadID, `Set ${key} to ${value}`);
-        thread.extra[key] = +value;
+        this.sendCommandMessage(threadID, `Set ${key} to ${value}`)
+        thread.extra[key] = +value
         await this.database
           .update(threads)
           .set({ extra: thread.extra })
-          .where(eq(threads.id, threadID));
+          .where(eq(threads.id, threadID))
 
-        return true;
+        return true
       }
 
       // If the user sends /help, return the list of available commands
       if (text.startsWith(COMMANDS.HELP)) {
         const message = `/clear reset the conversation\n/params shows the current parameters${validOptions
-          .map((option) => `\n/set ${option} ${extras[option]}`)
-          .join("")}`;
+          .map(option => `\n/set ${option} ${extras[option]}`)
+          .join('')}`
 
-        this.sendCommandMessage(threadID, message);
-        return true;
+        this.sendCommandMessage(threadID, message)
+        return true
       }
 
       // If the user sends /params, return the list of available parameters
       if (text.startsWith(COMMANDS.PARAMS) || text.startsWith(COMMANDS.PARAM)) {
         const message = `${validOptions
-          .map((option) => `${option} : ${extras[option]}`)
-          .join("\n")}`;
+          .map(option => `${option} : ${extras[option]}`)
+          .join('\n')}`
 
-        this.sendCommandMessage(threadID, message);
-        return true;
+        this.sendCommandMessage(threadID, message)
+        return true
       }
     }
 
-    const aiParticipant = thread.participants.items.find((p) => !p.isSelf);
+    const aiParticipant = thread.participants.items.find(p => !p.isSelf)
 
     // Set AI Activity to thinking
     this.eventHandler([
       {
         type: ServerEventType.USER_ACTIVITY,
         activityType: ActivityType.CUSTOM,
-        customLabel: "thinking",
+        customLabel: 'thinking',
         threadID,
         participantID: aiParticipant.id,
         durationMs: 30_000,
       },
-    ]);
+    ])
 
-    const msgs = this.messages.get(threadID) || [];
-    msgs.push(message);
-    this.messages.set(threadID, msgs);
+    const msgs = this.messages.get(threadID) || []
+    msgs.push(message)
+    this.messages.set(threadID, msgs)
 
     // Need to make sure state is updated beforehand so that certain providers give the results in the right order
     this.eventHandler([
       {
         type: ServerEventType.STATE_SYNC,
-        objectName: "message",
-        mutationType: "upsert",
+        objectName: 'message',
+        mutationType: 'upsert',
         objectIDs: { threadID },
         entries: [message],
       },
-    ]);
+    ])
 
     const aiMessage: Message = {
       id: uuid(),
       senderID: aiParticipant.id,
       threadID,
-      text: " ",
+      text: ' ',
       timestamp: new Date(),
       isSender: false,
       seen: true,
       isDelivered: true,
       isAction: false,
-    };
+    }
 
     // Extract the current options for the current model from extras
-    const currentOptions = { ...extras };
-    delete currentOptions.aiModelId;
-    delete currentOptions.titleGenerated;
-    delete currentOptions.promptType;
-    delete currentOptions.modelType;
+    const currentOptions = { ...extras }
+    delete currentOptions.aiModelId
+    delete currentOptions.titleGenerated
+    delete currentOptions.promptType
+    delete currentOptions.modelType
 
     if (modelType === MODEL_TYPES.CHAT) {
       this.getAIChatCompletion(
         threadID,
         this.getCallbacks(threadID, modelID, aiMessage),
         currentOptions,
-        this.provider
-      );
+        this.provider,
+      )
     } else if (modelType === MODEL_TYPES.COMPLETION) {
       this.getAICompletion(
         text,
@@ -687,20 +685,20 @@ export default class ChatGPT implements PlatformAPI {
         this.getCallbacks(threadID, modelID, aiMessage),
         currentOptions,
         extras.aiModelId,
-        this.provider
-      );
+        this.provider,
+      )
     } else if (modelType === MODEL_TYPES.ASSISTANT) {
-      this.getAssistantResponse(text, threadID, aiMessage, modelID);
+      this.getAssistantResponse(text, threadID, aiMessage, modelID)
     }
 
     // Generate a title for the conversation if it hasn't been done yet
-    const titleGenerated = thread.extra?.titleGenerated;
+    const titleGenerated = thread.extra?.titleGenerated
     if (!titleGenerated) {
-      this.generateTitle(threadID, text);
+      this.generateTitle(threadID, text)
     }
 
-    return [message];
-  };
+    return [message]
+  }
 
   getAIChatCompletion = async (
     threadID: string,
@@ -708,33 +706,33 @@ export default class ChatGPT implements PlatformAPI {
     currentOptions: AIOptions,
     providerID: AIProviderID,
     modelID?: string,
-    customMessages?: Message[]
+    customMessages?: Message[],
   ) => {
     try {
-      const thread = this.threads.get(threadID);
-      const messages = customMessages || this.messages.get(threadID);
+      const thread = this.threads.get(threadID)
+      const messages = customMessages || this.messages.get(threadID)
 
       if (!thread || !messages) {
-        throw new Error("Thread or messages not found");
+        throw new Error('Thread or messages not found')
       }
-      const extras = thread.extra;
-      const selectedModelID = modelID || extras.aiModelId;
+      const extras = thread.extra
+      const selectedModelID = modelID || extras.aiModelId
       const options = getModelOptions(
         selectedModelID,
         providerID,
-        currentOptions
-      );
+        currentOptions,
+      )
 
       // If the user overrides the model, we need to get its prompt type
       const promptType: PromptType = modelID
         ? getModelPromptType(modelID, providerID)
-        : extras.promptType;
+        : extras.promptType
 
       const msgs = mapMessagesToPrompt(
         messages,
         this.currentUser.id,
-        promptType
-      );
+        promptType,
+      )
 
       if (providerID === PROVIDER_IDS.OPENAI) {
         const openaiResponse = await this.openai.chat.completions.create({
@@ -742,11 +740,11 @@ export default class ChatGPT implements PlatformAPI {
           stream: true,
           messages: msgs as ChatCompletionMessageParam[],
           ...options,
-        });
+        })
 
-        const openaiStream = OpenAIStream(openaiResponse, callbacks);
-        const openaiResult = new StreamingTextResponse(openaiStream);
-        await openaiResult.text();
+        const openaiStream = OpenAIStream(openaiResponse, callbacks)
+        const openaiResult = new StreamingTextResponse(openaiStream)
+        await openaiResult.text()
       } else if (providerID === PROVIDER_IDS.REPLICATE) {
         const replicateResponse = await this.replicate.chat.create({
           stream: true,
@@ -755,20 +753,20 @@ export default class ChatGPT implements PlatformAPI {
           // @see https://github.com/vercel/ai/blob/99cf16edf0a09405d15d3867f997c96a8da869c6/packages/core/prompts/huggingface.ts#L53C1-L78C2
           prompt: msgs as string,
           ...options,
-        });
+        })
 
-        await processReplicateResponse(replicateResponse, callbacks);
+        await processReplicateResponse(replicateResponse, callbacks)
       } else if (providerID === PROVIDER_IDS.FIREWORKS) {
         const fireworksResponse = await this.openai.chat.completions.create({
           model: selectedModelID,
           stream: true,
           messages: msgs as ChatCompletionMessageParam[],
           ...options,
-        });
+        })
 
-        const fireworksStream = OpenAIStream(fireworksResponse, callbacks);
-        const fireworksResult = new StreamingTextResponse(fireworksStream);
-        await fireworksResult.text();
+        const fireworksStream = OpenAIStream(fireworksResponse, callbacks)
+        const fireworksResult = new StreamingTextResponse(fireworksStream)
+        await fireworksResult.text()
       } else if (providerID === PROVIDER_IDS.HUGGINGFACE) {
         const huggingfaceResponse = this.huggingface.textGenerationStream({
           model: selectedModelID,
@@ -776,21 +774,21 @@ export default class ChatGPT implements PlatformAPI {
           parameters: {
             ...options,
           },
-        });
+        })
 
         const huggingfaceStream = HuggingFaceStream(
           huggingfaceResponse,
-          callbacks
-        );
-        const huggingfaceResult = new StreamingTextResponse(huggingfaceStream);
-        await huggingfaceResult.text();
+          callbacks,
+        )
+        const huggingfaceResult = new StreamingTextResponse(huggingfaceStream)
+        await huggingfaceResult.text()
       } else if (providerID === PROVIDER_IDS.COHERE) {
         const lastUserMessage = msgs[
           msgs.length - 1
-        ] as CohereChatCompletionMessage;
+        ] as CohereChatCompletionMessage
 
         if (!lastUserMessage || !lastUserMessage.message) {
-          throw new Error("User message not found");
+          throw new Error('User message not found')
         }
 
         const cohereResponse = await this.cohere.chat.create({
@@ -799,39 +797,39 @@ export default class ChatGPT implements PlatformAPI {
           prompt: lastUserMessage.message as string,
           messages: msgs as CohereChatCompletionMessage[],
           ...options,
-        });
+        })
 
-        await processCohereResponse(cohereResponse, callbacks);
+        await processCohereResponse(cohereResponse, callbacks)
       } else if (providerID === PROVIDER_IDS.GOOGLE_GEMINI) {
         const geminiStream = await this.genAI
           .getGenerativeModel({
             model: selectedModelID,
             generationConfig: options,
           })
-          .generateContentStream({ contents: msgs as Content[] });
+          .generateContentStream({ contents: msgs as Content[] })
 
-        const stream = GoogleGenerativeAIStream(geminiStream, callbacks);
-        const googleResult = new StreamingTextResponse(stream);
-        await googleResult.text();
+        const stream = GoogleGenerativeAIStream(geminiStream, callbacks)
+        const googleResult = new StreamingTextResponse(stream)
+        await googleResult.text()
       } else if (providerID === PROVIDER_IDS.ANTHROPIC) {
-        if ("max_tokens" in options) {
+        if ('max_tokens' in options) {
           const anthropicResponse = await this.anthropic.messages.create({
             messages: msgs as AIMessage[],
             model: selectedModelID,
             stream: true,
             max_tokens: options.max_tokens,
             ...options,
-          });
+          })
 
-          const stream = AnthropicStream(anthropicResponse, callbacks);
-          const anthropicResult = new StreamingTextResponse(stream);
-          await anthropicResult.text();
+          const stream = AnthropicStream(anthropicResponse, callbacks)
+          const anthropicResult = new StreamingTextResponse(stream)
+          await anthropicResult.text()
         }
       }
     } catch (e) {
-      this.sendError(threadID, e);
+      this.sendError(threadID, e)
     }
-  };
+  }
 
   getAICompletion = async (
     userInput: string,
@@ -839,53 +837,53 @@ export default class ChatGPT implements PlatformAPI {
     callbacks: AIStreamCallbacksAndOptions,
     currentOptions: AIOptions,
     modelID: string,
-    providerID: AIProviderID
+    providerID: AIProviderID,
   ) => {
     try {
-      const thread = this.threads.get(threadID);
-      const extras = thread?.extra;
-      const selectedModelID = modelID ?? (extras.aiModelId as string);
-      const prompt = mapTextToPrompt(userInput, modelID);
+      const thread = this.threads.get(threadID)
+      const extras = thread?.extra
+      const selectedModelID = modelID ?? (extras.aiModelId as string)
+      const prompt = mapTextToPrompt(userInput, modelID)
       const options = getModelOptions(
         selectedModelID,
         providerID,
-        currentOptions
-      );
+        currentOptions,
+      )
 
       if (
-        providerID === PROVIDER_IDS.OPENAI ||
-        providerID === PROVIDER_IDS.OPENAI_ASSISTANT
+        providerID === PROVIDER_IDS.OPENAI
+        || providerID === PROVIDER_IDS.OPENAI_ASSISTANT
       ) {
         const openaiResponse = await this.openai.completions.create({
           model: selectedModelID,
           stream: true,
           prompt,
           ...options,
-        });
+        })
 
-        const openaiStream = OpenAIStream(openaiResponse, callbacks);
-        const openaiResult = new StreamingTextResponse(openaiStream);
-        await openaiResult.text();
+        const openaiStream = OpenAIStream(openaiResponse, callbacks)
+        const openaiResult = new StreamingTextResponse(openaiStream)
+        await openaiResult.text()
       } else if (providerID === PROVIDER_IDS.REPLICATE) {
         const replicateResponse = await this.replicate.completions.create({
           stream: true,
           model: selectedModelID,
           prompt,
           ...options,
-        });
+        })
 
-        await processReplicateResponse(replicateResponse, callbacks);
+        await processReplicateResponse(replicateResponse, callbacks)
       } else if (providerID === PROVIDER_IDS.FIREWORKS) {
         const fireworksResponse = await this.openai.completions.create({
           model: selectedModelID,
           stream: true,
           prompt,
           ...options,
-        });
+        })
 
-        const fireworksStream = OpenAIStream(fireworksResponse, callbacks);
-        const fireworksResult = new StreamingTextResponse(fireworksStream);
-        await fireworksResult.text();
+        const fireworksStream = OpenAIStream(fireworksResponse, callbacks)
+        const fireworksResult = new StreamingTextResponse(fireworksStream)
+        await fireworksResult.text()
       } else if (providerID === PROVIDER_IDS.HUGGINGFACE) {
         const huggingfaceResponse = this.huggingface.textGenerationStream({
           model: selectedModelID,
@@ -893,23 +891,23 @@ export default class ChatGPT implements PlatformAPI {
           parameters: {
             ...options,
           },
-        });
+        })
 
         const huggingfaceStream = HuggingFaceStream(
           huggingfaceResponse,
-          callbacks
-        );
-        const huggingfaceResult = new StreamingTextResponse(huggingfaceStream);
-        await huggingfaceResult.text();
+          callbacks,
+        )
+        const huggingfaceResult = new StreamingTextResponse(huggingfaceStream)
+        await huggingfaceResult.text()
       } else if (providerID === PROVIDER_IDS.COHERE) {
         const cohereResponse = await this.cohere.completions.create({
           model: selectedModelID,
           stream: true,
           prompt,
           ...options,
-        });
+        })
 
-        await processCohereResponse(cohereResponse, callbacks);
+        await processCohereResponse(cohereResponse, callbacks)
       } else if (providerID === PROVIDER_IDS.GOOGLE_GEMINI) {
         const geminiStream = await this.genAI
           .getGenerativeModel({
@@ -917,42 +915,42 @@ export default class ChatGPT implements PlatformAPI {
             generationConfig: options,
           })
           .generateContentStream({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-          });
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          })
 
-        const stream = GoogleGenerativeAIStream(geminiStream, callbacks);
-        const googleResult = new StreamingTextResponse(stream);
-        await googleResult.text();
+        const stream = GoogleGenerativeAIStream(geminiStream, callbacks)
+        const googleResult = new StreamingTextResponse(stream)
+        await googleResult.text()
       } else if (providerID === PROVIDER_IDS.ANTHROPIC) {
-        if (`max_tokens_to_sample` in options) {
+        if ('max_tokens_to_sample' in options) {
           const anthropicResponse = await this.anthropic.completions.create({
-            prompt: prompt,
+            prompt,
             model: selectedModelID,
             stream: true,
             ...options,
-          });
+          })
 
-          const stream = AnthropicStream(anthropicResponse, callbacks);
-          const anthropicResult = new StreamingTextResponse(stream);
-          await anthropicResult.text();
+          const stream = AnthropicStream(anthropicResponse, callbacks)
+          const anthropicResult = new StreamingTextResponse(stream)
+          await anthropicResult.text()
         }
       }
     } catch (e) {
-      console.log(e);
-      this.sendError(threadID, e);
+      console.log(e)
+      this.sendError(threadID, e)
     }
-  };
+  }
 
   sendError = (threadID: string, e: any) => {
     const errorMessage = {
-      id: "error-" + uuid(),
+      id: 'error-' + uuid(),
       timestamp: new Date(),
-      text: "Error: " + e.message ? e.message : e,
+      text: 'Error: ' + e.message ? e.message : e,
       senderID: ACTION_ID,
       isAction: true,
-    };
-    const thread = this.threads.get(threadID);
-    const aiParticipant = thread?.participants.items.find((p) => !p.isSelf);
+    }
+    const thread = this.threads.get(threadID)
+    const aiParticipant = thread?.participants.items.find(p => !p.isSelf)
 
     this.eventHandler([
       {
@@ -963,16 +961,16 @@ export default class ChatGPT implements PlatformAPI {
       },
       {
         type: ServerEventType.STATE_SYNC,
-        objectName: "message",
-        mutationType: "upsert",
+        objectName: 'message',
+        mutationType: 'upsert',
         objectIDs: { threadID },
         entries: [errorMessage],
       },
-    ]);
-  };
+    ])
+  }
 
   sendCommandMessage = async (threadID: string, text: string) => {
-    const modelID = this.threads.get(threadID)?.extra?.aiModelId;
+    const modelID = this.threads.get(threadID)?.extra?.aiModelId
     const message: Message = {
       id: uuid(),
       timestamp: new Date(),
@@ -980,7 +978,7 @@ export default class ChatGPT implements PlatformAPI {
       senderID: ACTION_ID,
       isSender: false,
       isAction: true,
-    };
+    }
 
     await this.database.insert(messages).values({
       id: message.id,
@@ -990,75 +988,74 @@ export default class ChatGPT implements PlatformAPI {
       senderID: message.senderID,
       isSender: message.isSender,
       isAction: message.isAction,
-    });
+    })
 
     const msgs = this.messages.get(threadID) || [
       getDefaultMessage(modelID, this.provider),
-    ];
+    ]
 
-    msgs.push(message);
+    msgs.push(message)
 
-    this.messages.set(threadID, msgs);
-  };
+    this.messages.set(threadID, msgs)
+  }
 
   getTitleCallbacks = (
     threadID: string,
-    generatedTitle: string[]
+    generatedTitle: string[],
   ): AIStreamCallbacksAndOptions => ({
     onStart: async () => {
       this.eventHandler([
         {
           type: ServerEventType.STATE_SYNC,
-          mutationType: "update",
-          objectName: "thread",
+          mutationType: 'update',
+          objectName: 'thread',
           objectIDs: {},
           entries: [
             {
               id: threadID,
-              title: generatedTitle.join(""),
+              title: generatedTitle.join(''),
             },
           ],
         },
-      ]);
+      ])
     },
-    onToken: async (token) => {
+    onToken: async token => {
       if (token.includes('"')) {
-        token = token.replaceAll('"', "");
+        token = token.replaceAll('"', '')
       }
-      generatedTitle.push(token);
+      generatedTitle.push(token)
 
       this.eventHandler([
         {
           type: ServerEventType.STATE_SYNC,
-          mutationType: "update",
-          objectName: "thread",
+          mutationType: 'update',
+          objectName: 'thread',
           objectIDs: {},
           entries: [
             {
               id: threadID,
-              title: generatedTitle.join(""),
+              title: generatedTitle.join(''),
             },
           ],
         },
-      ]);
+      ])
     },
     onFinal: async () => {
-      const thread = this.threads.get(threadID);
-      const newExtras = { ...thread.extra, titleGenerated: true };
-      thread?.extra && (thread.extra.titleGenerated = true);
+      const thread = this.threads.get(threadID)
+      const newExtras = { ...thread.extra, titleGenerated: true }
+      thread?.extra && (thread.extra.titleGenerated = true)
 
       await this.database
         .update(threads)
-        .set({ extra: newExtras, title: generatedTitle.join("") })
-        .where(eq(threads.id, threadID));
+        .set({ extra: newExtras, title: generatedTitle.join('') })
+        .where(eq(threads.id, threadID))
     },
-  });
+  })
 
   generateTitle = async (threadID: string, firstUserPrompt: string) => {
-    const generatedTitle: string[] = [];
-    const prompt =
-      "Generate a title for this conversation. Your response must be only the title. Consider the first message of user to be this :" +
-      firstUserPrompt;
+    const generatedTitle: string[] = []
+    const prompt = 'Generate a title for this conversation. Your response must be only the title. Consider the first message of user to be this :'
+      + firstUserPrompt
 
     try {
       if (this.provider === PROVIDER_IDS.OPENAI) {
@@ -1068,8 +1065,8 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.OPENAI, this.provider),
           TITLE_MODELS.OPENAI,
-          this.provider
-        );
+          this.provider,
+        )
       } else if (this.provider === PROVIDER_IDS.REPLICATE) {
         // Because Replicate doesnt have a good model for title generation, we will use the chat model instead
         const messageArray: Message[] = [
@@ -1077,17 +1074,17 @@ export default class ChatGPT implements PlatformAPI {
             id: uuid(),
             timestamp: new Date(),
             text: prompt,
-            senderID: "none",
+            senderID: 'none',
           },
-        ];
+        ]
         this.getAIChatCompletion(
           threadID,
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.REPLICATE, this.provider),
           this.provider,
           TITLE_MODELS.REPLICATE,
-          messageArray
-        );
+          messageArray,
+        )
       } else if (this.provider === PROVIDER_IDS.FIREWORKS) {
         this.getAICompletion(
           prompt,
@@ -1095,8 +1092,8 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.FIREWORKS, this.provider),
           TITLE_MODELS.FIREWORKS,
-          this.provider
-        );
+          this.provider,
+        )
       } else if (this.provider === PROVIDER_IDS.HUGGINGFACE) {
         this.getAICompletion(
           prompt,
@@ -1104,8 +1101,8 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.HUGGINGFACE, this.provider),
           TITLE_MODELS.HUGGINGFACE,
-          this.provider
-        );
+          this.provider,
+        )
       } else if (this.provider === PROVIDER_IDS.COHERE) {
         this.getAICompletion(
           prompt,
@@ -1113,8 +1110,8 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.COHERE, this.provider),
           TITLE_MODELS.COHERE,
-          this.provider
-        );
+          this.provider,
+        )
       } else if (this.provider === PROVIDER_IDS.OPENAI_ASSISTANT) {
         this.getAICompletion(
           prompt,
@@ -1122,8 +1119,8 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.OPENAI, PROVIDER_IDS.OPENAI),
           TITLE_MODELS.OPENAI,
-          PROVIDER_IDS.OPENAI
-        );
+          PROVIDER_IDS.OPENAI,
+        )
       } else if (this.provider === PROVIDER_IDS.GOOGLE_GEMINI) {
         this.getAICompletion(
           prompt,
@@ -1131,8 +1128,8 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.GOOGLE_GEMINI, this.provider),
           TITLE_MODELS.GOOGLE_GEMINI,
-          this.provider
-        );
+          this.provider,
+        )
       } else if (this.provider === PROVIDER_IDS.ANTHROPIC) {
         this.getAICompletion(
           prompt,
@@ -1140,14 +1137,14 @@ export default class ChatGPT implements PlatformAPI {
           this.getTitleCallbacks(threadID, generatedTitle),
           getModelOptions(TITLE_MODELS.ANTHROPIC, this.provider),
           TITLE_MODELS.ANTHROPIC,
-          this.provider
-        );
+          this.provider,
+        )
       }
     } catch (e) {
-      this.sendError(threadID, e);
-      texts.error(e);
+      this.sendError(threadID, e)
+      texts.error(e)
     }
-  };
+  }
 
   initProvider = (provider: string) => {
     switch (provider) {
@@ -1155,114 +1152,114 @@ export default class ChatGPT implements PlatformAPI {
       case PROVIDER_IDS.OPENAI_ASSISTANT:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
-        });
-        break;
+        })
+        break
       case PROVIDER_IDS.REPLICATE:
-        this.replicate = new ReplicateAPI(this.apiKey);
-        break;
+        this.replicate = new ReplicateAPI(this.apiKey)
+        break
       case PROVIDER_IDS.FIREWORKS:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
-          baseURL: "https://api.fireworks.ai/inference/v1",
-        });
-        break;
+          baseURL: 'https://api.fireworks.ai/inference/v1',
+        })
+        break
       case PROVIDER_IDS.HUGGINGFACE:
-        this.huggingface = new HfInference(this.apiKey);
-        break;
+        this.huggingface = new HfInference(this.apiKey)
+        break
       case PROVIDER_IDS.COHERE:
-        this.cohere = new CohereAPI(this.apiKey);
-        break;
+        this.cohere = new CohereAPI(this.apiKey)
+        break
       case PROVIDER_IDS.GOOGLE_GEMINI:
-        this.genAI = new GoogleGenerativeAI(this.apiKey);
-        break;
+        this.genAI = new GoogleGenerativeAI(this.apiKey)
+        break
       case PROVIDER_IDS.ANTHROPIC:
-        this.anthropic = new Anthropic({ apiKey: this.apiKey });
+        this.anthropic = new Anthropic({ apiKey: this.apiKey })
       default:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
-        });
-        break;
+        })
+        break
     }
-  };
+  }
 
   createFiles = async (filePaths: string[]) => {
-    const fileIds: string[] = [];
+    const fileIds: string[] = []
     for (const filePath of filePaths) {
-      texts.log(filePath);
+      texts.log(filePath)
       const fileResponse = await this.openai.files.create({
         file: createReadStream(filePath),
-        purpose: "assistants",
-      });
-      fileIds.push(fileResponse.id);
+        purpose: 'assistants',
+      })
+      fileIds.push(fileResponse.id)
     }
-    return fileIds;
-  };
+    return fileIds
+  }
 
   createAssistant = async (files: string[]) => {
     if (files.length === 0) {
       const assistantResponse = await this.openai.beta.assistants.create({
-        name: "AI Playground Assistant",
-        description: "Assistant for AI Playground",
+        name: 'AI Playground Assistant',
+        description: 'Assistant for AI Playground',
         model: ASSISTANT_MODELS.OPENAI_ASSISTANT,
         file_ids: files,
-      });
-      return assistantResponse.id;
+      })
+      return assistantResponse.id
     }
     const assistantResponse = await this.openai.beta.assistants.create({
-      name: "AI Playground Assistant",
-      description: "Assistant for AI Playground",
+      name: 'AI Playground Assistant',
+      description: 'Assistant for AI Playground',
       model: ASSISTANT_MODELS.OPENAI_ASSISTANT,
-      tools: [{ type: "retrieval" }],
+      tools: [{ type: 'retrieval' }],
       file_ids: files,
-    });
-    return assistantResponse.id;
-  };
+    })
+    return assistantResponse.id
+  }
 
   createAssistantThread = async () => {
-    const thread = await this.openai.beta.threads.create({});
-    return thread.id;
-  };
+    const thread = await this.openai.beta.threads.create({})
+    return thread.id
+  }
 
   getAssistantResponse = async (
     text: string,
     threadID: string,
     aiMessage: Message,
-    modelID: string
+    modelID: string,
   ) => {
     await this.openai.beta.threads.messages.create(
       threadID,
       {
-        role: "user",
+        role: 'user',
         content: text,
-      }
-    );
+      },
+    )
 
-    const generatedText: string[] = [];
+    const generatedText: string[] = []
 
     const run = this.openai.beta.threads.runs
       .createAndStream(threadID, {
         assistant_id: this.assistantID,
       })
-      .on(`textDelta`, (text) => {
-        generatedText.push(text.value);
-        aiMessage.text = generatedText.join("");
+      .on('textDelta', text => {
+        generatedText.push(text.value)
+        aiMessage.text = generatedText.join('')
         this.eventHandler([
           {
             type: ServerEventType.STATE_SYNC,
-            objectName: "message",
-            mutationType: "upsert",
+            objectName: 'message',
+            mutationType: 'upsert',
             objectIDs: { threadID },
             entries: [aiMessage],
           },
-        ]);
+        ])
       })
       // .on(`toolCallDelta`, (toolCallDelta) => {
       //   if (toolCallDelta.type === `code_interpreter`) {
       //     console.log(toolCallDelta.code_interpreter.input);
       //   }
       // })
-      .on(`textDone`, async (text) => {
-        console.log(text.value);
+      .on('textDone', async text => {
+        console.log(text.value)
         const messageToInsert: MessageDBInsert = {
           ...aiMessage,
           timestamp: aiMessage.timestamp.toISOString(),
@@ -1272,12 +1269,12 @@ export default class ChatGPT implements PlatformAPI {
           extra: {
             isCommand: false,
           },
-        };
-  
-        await this.database.insert(messages).values(messageToInsert);
-      });
+        }
 
-    await run.done();
+        await this.database.insert(messages).values(messageToInsert)
+      })
+
+    await run.done()
 
     // Set AI Activity to none
     this.eventHandler([
@@ -1287,15 +1284,15 @@ export default class ChatGPT implements PlatformAPI {
         threadID,
         participantID: modelID,
       },
-    ]);
-  };
+    ])
+  }
 
   deleteThread = async (threadID: ThreadID) => {
-    this.threads.delete(threadID);
-    await deleteThread(this.database, threadID);
-  };
+    this.threads.delete(threadID)
+    await deleteThread(this.database, threadID)
+  }
 
-  sendActivityIndicator = (threadId: string) => {};
+  sendActivityIndicator = (threadId: string) => {}
 
-  sendReadReceipt = (threadId: string) => {};
+  sendReadReceipt = (threadId: string) => {}
 }
