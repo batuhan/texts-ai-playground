@@ -11,7 +11,6 @@ import { Content } from '@google/generative-ai'
 import {
   AIMessage,
   AIOptions,
-  AIProvider,
   AIProviderID,
   CohereChatCompletionMessage,
   PromptType,
@@ -73,14 +72,8 @@ export function getModelPromptType(modelID: string, provider: AIProviderID) {
 }
 
 export function getProviderName(providerID: AIProviderID) {
-  const provider = PROVIDERS.find(
-    (provider: AIProvider) => provider.id === providerID,
-  )
-
-  if (!provider) {
-    throw new Error(`Provider ${providerID} not found`)
-  }
-
+  const provider = PROVIDERS.find(p => p.id === providerID)
+  if (!provider) throw new Error(`Provider ${providerID} not found`)
   return provider.fullName
 }
 
@@ -116,23 +109,21 @@ export function mapMessagesToPrompt(
     content: m.text ?? '',
   }))
 
-  {
-    switch (promptType) {
-      case 'openassistant':
-        return experimental_buildOpenAssistantPrompt(msgs)
-      case 'llama2':
-        return experimental_buildLlama2Prompt(msgs)
-      case 'starchat':
-        return experimental_buildStarChatBetaPrompt(msgs)
-      case 'cohere':
-        return buildCohereChatPrompt(msgs)
-      case 'google-genai':
-        return buildGoogleGenAIPrompt(msgs)
-      case 'default':
-        return msgs
-      default:
-        return msgs
-    }
+  switch (promptType) {
+    case 'openassistant':
+      return experimental_buildOpenAssistantPrompt(msgs)
+    case 'llama2':
+      return experimental_buildLlama2Prompt(msgs)
+    case 'starchat':
+      return experimental_buildStarChatBetaPrompt(msgs)
+    case 'cohere':
+      return buildCohereChatPrompt(msgs)
+    case 'google-genai':
+      return buildGoogleGenAIPrompt(msgs)
+    case 'default':
+      return msgs
+    default:
+      return msgs
   }
 }
 

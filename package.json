@@ -10,7 +10,7 @@
     "build": "tsc && yarn db:generate",
     "prepack": "yarn build",
     "db:generate": "drizzle-kit generate:sqlite",
-    "lint": "eslint src --ext ts,tsx,js,jsx --cache"
+    "lint": "eslint src --ext ts,tsx,js,jsx --cache --fix"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.2",

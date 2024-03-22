@@ -2,41 +2,6 @@ import { Message, MessageBehavior, Thread, User } from '@textshq/platform-sdk'
 import type { MessageDBSelect, UserDBSelect } from '../types'
 import type { ThreadWithMessagesAndParticipants } from './repo'
 
-export function mapDbThreadToTextsThread(
-  obj: ThreadWithMessagesAndParticipants,
-) {
-  const thread: Thread = {
-    id: obj.id,
-    title: obj.title === null ? undefined : obj.title,
-    isUnread: obj.isUnread === null ? false : obj.isUnread,
-    lastReadMessageID:
-      obj.lastReadMessageID === null ? undefined : obj.lastReadMessageID,
-    isReadOnly: obj.isReadOnly === null ? false : obj.isReadOnly,
-    isArchived: obj.isArchived === null ? undefined : obj.isArchived,
-    isPinned: obj.isPinned === null ? undefined : obj.isPinned,
-    type: obj.type || 'single',
-    timestamp: new Date(obj.timestamp || undefined),
-    imgURL: obj.imgURL === null ? undefined : obj.imgURL,
-    createdAt: obj.createdAt === null ? undefined : new Date(obj.createdAt),
-    description: obj.description === null ? undefined : obj.description,
-    messageExpirySeconds:
-      obj.messageExpirySeconds === null ? undefined : obj.messageExpirySeconds,
-    participants: {
-      items: obj.participants.map(userId => mapDbUserToTextsUser(userId.participants)),
-      hasMore: false,
-    },
-    messages: {
-      items: obj.messages.map(message => mapDbMessageToTextsMessage(message)),
-      hasMore: false,
-    },
-    extra: obj.extra || undefined,
-  }
-
-  console.log(thread)
-
-  return thread
-}
-
 export function mapDbMessageToTextsMessage(obj: MessageDBSelect) {
   const message: Message = {
     id: obj.id,
@@ -78,4 +43,35 @@ export function mapDbUserToTextsUser(obj: UserDBSelect) {
   }
 
   return user
+}
+
+export function mapDbThreadToTextsThread(
+  obj: ThreadWithMessagesAndParticipants,
+): Thread {
+  return {
+    id: obj.id,
+    title: obj.title === null ? undefined : obj.title,
+    isUnread: obj.isUnread === null ? false : obj.isUnread,
+    lastReadMessageID:
+      obj.lastReadMessageID === null ? undefined : obj.lastReadMessageID,
+    isReadOnly: obj.isReadOnly === null ? false : obj.isReadOnly,
+    isArchived: obj.isArchived === null ? undefined : obj.isArchived,
+    isPinned: obj.isPinned === null ? undefined : obj.isPinned,
+    type: obj.type || 'single',
+    timestamp: new Date(obj.timestamp || undefined),
+    imgURL: obj.imgURL === null ? undefined : obj.imgURL,
+    createdAt: obj.createdAt === null ? undefined : new Date(obj.createdAt),
+    description: obj.description === null ? undefined : obj.description,
+    messageExpirySeconds:
+      obj.messageExpirySeconds === null ? undefined : obj.messageExpirySeconds,
+    participants: {
+      items: obj.participants.map(userId => mapDbUserToTextsUser(userId.participants)),
+      hasMore: false,
+    },
+    messages: {
+      items: obj.messages.map(message => mapDbMessageToTextsMessage(message)),
+      hasMore: false,
+    },
+    extra: obj.extra || undefined,
+  }
 }
