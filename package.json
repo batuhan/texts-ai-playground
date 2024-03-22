@@ -1,5 +1,5 @@
 {
-  "name": "@textshq/platform-ai-playground",
+  "name": "@batuhan/texts-ai-playground",
   "version": "0.1.0",
   "main": "dist/index.js",
   "files": [
@@ -16,7 +16,7 @@
     "@anthropic-ai/sdk": "^0.17.2",
     "@google/generative-ai": "^0.3.0",
     "@huggingface/inference": "^2.6.4",
-    "@textshq/platform-sdk": "file: ~/../../platform-sdk/",
+    "@textshq/platform-sdk": "https://github.com/TextsHQ/platform-sdk#main",
     "ai": "^3.0.9",
     "better-sqlite3": "^9.4.3",
     "chance": "^1.1.8",
@@ -27,7 +27,7 @@
     "got": "^11.0.0",
     "lodash": "^4.17.21",
     "openai": "^4.29.0",
-    "react": "file: ~/../../react-global-shim-main/",
+    "react": "https://github.com/TextsHQ/react-global-shim#main",
     "replicate": "^0.20.1"
   },
   "devDependencies": {
