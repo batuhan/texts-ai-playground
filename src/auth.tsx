@@ -181,7 +181,7 @@ const auth: React.FC<AuthProps> = ({ login }) => {
               onClick={handleAddFileClick}
               style={{ width: '100%' }}
             >
-              Select Files ( Optional )
+              Select Files (Optional)
             </button>
             <input
               type="file"

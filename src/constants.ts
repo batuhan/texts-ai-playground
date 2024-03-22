@@ -14,15 +14,11 @@ import {
 import { AIProvider, AIProviderID, AIProviderModel } from './types'
 
 const isiOS = (process.platform as string) === 'ios'
-const BINARIES_DIR_PATH = texts.getBinariesDirPath('ai-playground')
+const BINARIES_DIR_PATH = texts.getBinariesDirPath('b-ai-playground')
 
 const getBinaryPath = (binaryName: string) => (texts.IS_DEV && !isiOS
   ? path.join(__dirname, '../binaries', binaryName)
   : path.join(BINARIES_DIR_PATH, binaryName))
-
-// // I need this because my platform-sdk doesnt have getBinariesDirPath
-// const getBinaryPath = (binaryName: string) =>
-//   path.join(__dirname, "../binaries", binaryName);
 
 export const DRIZZLE_DIR_PATH = getBinaryPath('drizzle')
 export const ACTION_ID = 'action'
@@ -84,6 +80,23 @@ export const MODELS: AIProviderModel[] = [
           top_p: 1,
           frequency_penalty: 0,
           presence_penalty: 0,
+          max_tokens: 250,
+        },
+      },
+    ],
+  },
+  {
+    provider: 'openai-assistant',
+    models: [
+      {
+        id: 'gpt-4-1106-preview',
+        fullName: 'OpenAI Assistant',
+        imgURL: OPENAI_SVG_DATA_URI,
+        promptType: 'default',
+        modelType: 'assistant',
+        options: {
+          temperature: 0.9,
+          top_p: 1,
           max_tokens: 250,
         },
       },
@@ -318,23 +331,6 @@ export const MODELS: AIProviderModel[] = [
     ],
   },
   {
-    provider: 'openai-assistant',
-    models: [
-      {
-        id: 'gpt-4-1106-preview',
-        fullName: 'OpenAI Assistant',
-        imgURL: OPENAI_SVG_DATA_URI,
-        promptType: 'default',
-        modelType: 'assistant',
-        options: {
-          temperature: 0.9,
-          top_p: 1,
-          max_tokens: 250,
-        },
-      },
-    ],
-  },
-  {
     provider: 'google-gemini',
     models: [
       {
@@ -418,6 +414,11 @@ export const PROVIDERS: AIProvider[] = [
     imgURL: OPENAI_SVG_DATA_URI,
   },
   {
+    id: 'openai-assistant',
+    fullName: 'OpenAI Assistant',
+    imgURL: OPENAI_SVG_DATA_URI,
+  },
+  {
     id: 'fireworks',
     fullName: 'Fireworks.ai',
     imgURL: REPLICATE_SVG_DATA_URI,
@@ -436,11 +437,6 @@ export const PROVIDERS: AIProvider[] = [
     id: 'replicate',
     fullName: 'Replicate',
     imgURL: REPLICATE_SVG_DATA_URI,
-  },
-  {
-    id: 'openai-assistant',
-    fullName: 'OpenAI Assistant',
-    imgURL: OPENAI_SVG_DATA_URI,
   },
   {
     id: 'google-gemini',
