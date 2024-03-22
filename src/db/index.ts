@@ -9,7 +9,7 @@ import * as schema from './schema'
 
 export type AIPlaygroundDatabase = BetterSQLite3Database<typeof schema>
 
-const getManifestBinaryPath = (dataDirPath: string, binaryName: string) => join(dataDirPath, '..', 'platform-integration-ai-playground', 'binaries', binaryName)
+const getManifestBinaryPath = (dataDirPath: string, binaryName: string) => join(dataDirPath, '..', 'platform-integration-b-ai-playground', 'binaries', binaryName)
 
 const createDirIfNotExists = (dir: string) => {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })

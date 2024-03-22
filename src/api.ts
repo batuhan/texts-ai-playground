@@ -269,19 +269,19 @@ export default class ChatGPT implements PlatformAPI {
       }
     }
 
-    const messages = dbMessages.map(message => {
+    const items = dbMessages.map(message => {
       const textsData = mapDbMessageToTextsMessage(message)
       return textsData
     })
 
-    this.messages.set(threadID, messages)
+    this.messages.set(threadID, items)
     this.threads.set(threadID, {
       ...thread,
-      messages: { items: messages, hasMore: false },
+      messages: { items, hasMore: false },
     })
 
     return {
-      items: orderBy(messages, 'timestamp'),
+      items: orderBy(items, 'timestamp'),
       hasMore: false,
     }
   }
@@ -413,9 +413,9 @@ export default class ChatGPT implements PlatformAPI {
     aiMessage: Message,
   ): AIStreamCallbacksAndOptions => ({
     onStart: async () => {
-      const messages = this.messages.get(threadID)
-      if (!messages) throw new Error('Messages not found')
-      messages.push(aiMessage)
+      const msgs = this.messages.get(threadID)
+      if (!msgs) throw new Error('Messages not found')
+      msgs.push(aiMessage)
       this.eventHandler([
         {
           type: ServerEventType.STATE_SYNC,
@@ -443,6 +443,14 @@ export default class ChatGPT implements PlatformAPI {
           objectIDs: { threadID },
           entries: [aiMessage],
         },
+        {
+          type: ServerEventType.USER_ACTIVITY,
+          activityType: ActivityType.CUSTOM,
+          customLabel: 'thinking',
+          threadID,
+          participantID: aiMessage.senderID,
+          durationMs: 2_000,
+        },
       ])
     },
     onFinal: async (completion: string) => {
@@ -451,7 +459,7 @@ export default class ChatGPT implements PlatformAPI {
           type: ServerEventType.USER_ACTIVITY,
           activityType: ActivityType.NONE,
           threadID,
-          participantID: modelID,
+          participantID: aiMessage.senderID,
         },
       ])
       const messageToInsert: MessageDBInsert = {
@@ -583,7 +591,7 @@ export default class ChatGPT implements PlatformAPI {
         const [_, key, value] = text.split(' ')
 
         // If the key is not valid, return an error
-        if (!validOptions.includes(key) || !value || isNaN(+value)) {
+        if (!validOptions.includes(key) || !value || Number.isNaN(+value)) {
           this.sendCommandMessage(
             threadID,
             `Key ${key} not assignable for this model`,
@@ -604,21 +612,21 @@ export default class ChatGPT implements PlatformAPI {
 
       // If the user sends /help, return the list of available commands
       if (text.startsWith(COMMANDS.HELP)) {
-        const message = `/clear reset the conversation\n/params shows the current parameters${validOptions
+        const msg = `/clear reset the conversation\n/params shows the current parameters${validOptions
           .map(option => `\n/set ${option} ${extras[option]}`)
           .join('')}`
 
-        this.sendCommandMessage(threadID, message)
+        this.sendCommandMessage(threadID, msg)
         return true
       }
 
       // If the user sends /params, return the list of available parameters
       if (text.startsWith(COMMANDS.PARAMS) || text.startsWith(COMMANDS.PARAM)) {
-        const message = `${validOptions
+        const msg = `${validOptions
           .map(option => `${option} : ${extras[option]}`)
           .join('\n')}`
 
-        this.sendCommandMessage(threadID, message)
+        this.sendCommandMessage(threadID, msg)
         return true
       }
     }
@@ -633,7 +641,7 @@ export default class ChatGPT implements PlatformAPI {
         customLabel: 'thinking',
         threadID,
         participantID: aiParticipant.id,
-        durationMs: 30_000,
+        durationMs: 2_000,
       },
     ])
 
@@ -1043,7 +1051,7 @@ export default class ChatGPT implements PlatformAPI {
     onFinal: async () => {
       const thread = this.threads.get(threadID)
       const newExtras = { ...thread.extra, titleGenerated: true }
-      thread?.extra && (thread.extra.titleGenerated = true)
+      if (thread?.extra) thread.extra.titleGenerated = true
 
       await this.database
         .update(threads)
@@ -1174,6 +1182,7 @@ export default class ChatGPT implements PlatformAPI {
         break
       case PROVIDER_IDS.ANTHROPIC:
         this.anthropic = new Anthropic({ apiKey: this.apiKey })
+        break
       default:
         this.openai = new OpenAI({
           apiKey: this.apiKey,
@@ -1240,8 +1249,8 @@ export default class ChatGPT implements PlatformAPI {
       .createAndStream(threadID, {
         assistant_id: this.assistantID,
       })
-      .on('textDelta', text => {
-        generatedText.push(text.value)
+      .on('textDelta', t => {
+        generatedText.push(t.value)
         aiMessage.text = generatedText.join('')
         this.eventHandler([
           {
@@ -1258,13 +1267,12 @@ export default class ChatGPT implements PlatformAPI {
       //     console.log(toolCallDelta.code_interpreter.input);
       //   }
       // })
-      .on('textDone', async text => {
-        console.log(text.value)
+      .on('textDone', async t => {
         const messageToInsert: MessageDBInsert = {
           ...aiMessage,
           timestamp: aiMessage.timestamp.toISOString(),
           editedTimestamp: undefined,
-          text: text.value,
+          text: t.value,
           seen: true,
           extra: {
             isCommand: false,
